@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+build/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+
+# tooling caches
+.wrangler/
+.deno/
+*.tsbuildinfo
+
+# celld local state
+celld-data/
+*.ltx
+
+# logs / os
+*.log
+.DS_Store
