@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A scripted browser preview of the Protein cellular-agent experiment contracts.">
+    <title>Protein — Swarm Scenario Preview</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#workbench">Skip to scenario workbench</a>
+    <header class="topbar">
+      <a class="wordmark" href="/" aria-label="Protein cellular agent swarm home">
+        <span class="wordmark-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span>PROTEIN <b>/</b> SWARM</span>
+      </a>
+      <div class="topbar-status" aria-live="polite">
+        <span class="status-dot"></span>
+        <span id="run-status">Loading scenario</span>
+      </div>
+      <div class="topbar-meta">SCRIPTED NODE SCENARIO</div>
+    </header>
+
+    <aside class="mode-disclosure" aria-label="Runtime disclosure">
+      <strong>Scenario preview</strong>
+      <span>No celld · no LLM · no external agent execution. Values on this page are deterministic fixtures for inspecting the proposed interaction model.</span>
+      <a class="disclosure-link" href="/celld.html">View latest real celld run →</a>
+    </aside>
+
+    <main>
+      <section class="intro" aria-labelledby="page-title">
+        <div class="intro-copy">
+          <p class="claim-label proposal">Scripted scenario</p>
+          <h1 id="page-title">Local exchange,<br>previewed.</h1>
+          <p class="lede">Explore how sixteen proposed cells could exchange nearby evidence. This interface runs a fixed scenario; it does not display the celld experiment.</p>
+          <div class="run-controls" aria-label="Experiment controls">
+            <label>
+              <span>Condition</span>
+              <select id="condition-select">
+                <option value="local">16 local agents</option>
+                <option value="isolated">16 isolated agents</option>
+                <option value="sequential">one sequential agent</option>
+              </select>
+            </label>
+            <button class="button secondary" id="reset-button" type="button">Reset run</button>
+            <button class="button primary" id="step-button" type="button">Advance generation</button>
+            <button class="button quiet" id="play-button" type="button" aria-pressed="false">Auto-run</button>
+          </div>
+          <p class="control-note" id="control-note">These controls advance a deterministic fixture. Run the celld command above for durable runtime evidence.</p>
+        </div>
+        <aside class="task-brief" aria-labelledby="task-title">
+          <div class="brief-heading">
+            <span class="brief-index">TASK / 01</span>
+            <span class="claim-label observed">Fixture evaluator</span>
+          </div>
+          <h2 id="task-title">Sorted unique stream</h2>
+          <p id="task-prompt">Loading task specification…</p>
+          <div class="checks">
+            <div>
+              <strong>Public checks</strong>
+              <ul id="public-checks"></ul>
+            </div>
+            <div>
+              <strong>Hidden checks</strong>
+              <ul id="hidden-checks"></ul>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="workbench" id="workbench" aria-labelledby="workbench-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Interactive scenario</p>
+            <h2 id="workbench-title">The proposed field</h2>
+          </div>
+          <p id="generation-summary" class="section-summary">Loading generation state…</p>
+        </div>
+
+        <div class="workbench-layout">
+          <section class="field-panel" aria-labelledby="field-title">
+            <div class="field-panel-head">
+              <div>
+                <h3 id="field-title">Scenario score by cell</h3>
+                <p>The script limits each cell to its Moore neighborhood at the previous step.</p>
+              </div>
+              <div class="field-stat" aria-label="Best scenario score">
+                <span>scenario best</span>
+                <output id="best-score">—</output>
+              </div>
+            </div>
+            <div class="cell-grid" id="cell-grid" role="grid" aria-label="Cellular agent field"></div>
+            <div class="field-legend" aria-label="Cell score legend">
+              <span><i class="legend-cell high"></i> scripted improvement</span>
+              <span><i class="legend-cell mid"></i> scripted baseline</span>
+              <span><i class="legend-cell low"></i> scripted rejection</span>
+              <span><i class="legend-ring"></i> selected cell</span>
+            </div>
+          </section>
+
+          <aside class="inspector" aria-labelledby="inspector-title">
+            <div class="inspector-head">
+              <p class="section-kicker">Inspection</p>
+              <h3 id="inspector-title">Selected cell</h3>
+            </div>
+            <div id="inspector-content" class="inspector-content" aria-live="polite"></div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="analysis" aria-labelledby="analysis-title">
+        <div class="section-heading compact">
+          <div>
+            <p class="section-kicker">Scenario trace</p>
+            <h2 id="analysis-title">What did the script change?</h2>
+          </div>
+          <p class="section-summary">Fixture scores illustrate the intended view. They are not measurements from celld, a model, or an independent evaluator.</p>
+        </div>
+        <div class="analysis-layout">
+          <figure class="trace-panel" aria-labelledby="trace-title">
+            <figcaption>
+              <span>
+                <strong id="trace-title">Best and median score</strong>
+                <small>Frozen after each generation settlement</small>
+              </span>
+              <span class="chart-key"><i class="line-key best"></i> best <i class="line-key median"></i> median</span>
+            </figcaption>
+            <svg id="score-chart" viewBox="0 0 640 210" role="img" aria-label="Best and median scripted score by generation"></svg>
+          </figure>
+          <section class="ledger" aria-labelledby="ledger-title">
+            <div class="ledger-title">
+              <h3 id="ledger-title">Run ledger</h3>
+              <span id="ledger-status">—</span>
+            </div>
+            <dl id="ledger-values"></dl>
+          </section>
+        </div>
+      </section>
+
+      <section class="comparison-section" aria-labelledby="comparison-title">
+        <div class="section-heading compact">
+          <div>
+            <p class="section-kicker">Fixed seed · authored outcomes</p>
+            <h2 id="comparison-title">Scenario comparison</h2>
+          </div>
+          <p class="section-summary">This table previews a hypothesis. It cannot support a claim that local agents outperform isolated or sequential agents.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Condition</th><th>Scenario best</th><th>Scripted artifact</th><th>Credits spent</th><th>Scripted checks</th><th>Rejected</th></tr>
+            </thead>
+            <tbody id="comparison-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="journal-section" aria-labelledby="journal-title">
+        <div class="section-heading compact">
+          <div>
+            <p class="section-kicker">Fixture trail</p>
+            <h2 id="journal-title">Scripted events</h2>
+          </div>
+          <p class="section-summary">For durable journals and action receipts, inspect a run bundle produced by <code>npm run swarm:celld</code>.</p>
+        </div>
+        <ol class="event-list" id="event-list" aria-live="polite"></ol>
+      </section>
+    </main>
+
+    <footer>
+      <span>PROTEIN / SWARM SCENARIO PREVIEW</span>
+      <span>Scripted Node fixture · not a celld run</span>
+    </footer>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

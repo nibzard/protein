@@ -1,71 +1,159 @@
-# NOTES — technical reference & landscape
+# Research notes
 
-Detailed reference behind `README.md` / `IDEA.md` / `RUNTIME.md`. The full list of celld constraints and gotchas lives in [`CLAUDE.md`](./CLAUDE.md); this file covers design rationale, the competitive landscape, and risk.
+Research date: 2026-08-09.
 
-## Design decisions & rationale
+## Corrected cube thesis — 2026-08-11
 
-- **One cell per agent, not one cell per step.** A cell is the durable identity and memory; steps are alarm wakes *within* it. Splitting per-step would throw away the single-owner guarantee and the private SQLite that make the model cheap.
-- **Alarms over a long loop.** celld's workers are short-lived and bounded; `setInterval` throws. Pacing across alarms turns a long agent into many cheap, inspectable, resumable units — and lets the cell hibernate between them.
-- **DNA as SQLite, not a KV bag.** A relational schema gives queryable, inspectable memory (messages, events, artifacts-metadata) for free. KV is available as the fallback for singletons.
-- **`translate()` is provider-agnostic and lives in the subclass.** No `env.AI` exists on celld; even if it did, binding the model would be lock-in we explicitly reject. The base class never imports a provider.
-- **No blobs in the cell.** R2 is unusable from a Worker on celld. Artifacts are metadata + hash in SQLite; bytes live in an external object store the caller owns. This is a hard constraint, not a preference.
-- **Portable interface from day one.** Every celld-coupling sits behind `ProteinDna` (and a future `ActorRuntime`). The single biggest project risk is celld's maturity; the mitigation is a swappable backend.
+The purpose of a larger cellular population is not only to maximize benchmark
+intelligence or prove that many agents beat one agent. That framing is too
+narrow.
 
-### Open design tensions (not yet resolved)
+Protein and celld can demonstrate a future agentic compute fabric in which many
+lightweight agents retain durable identity, local state, schedules, work claims,
+relationships, and provenance while sleeping between useful activations. Most
+agents may need only their cell for coordination. Some work should escalate on
+demand to an LLM, a bounded tool process, or a full Linux sandbox, then return a
+durable result and receipt to the originating cell.
 
-- **Multi-cell composition.** Planner/worker over named cells is possible and idiomatic, but cross-cell ordering is the application's job (celld gives single-cell serialization, not cross-cell). v1 stays single-cell; a composition layer is post-v1.
-- **Fleet primitives.** Concurrency, fairness, rate limits (Hatchet's strength) are absent. v1 is explicitly single-agent / small-fleet.
-- **Durability window.** A Worker cannot observe when LTX replication to S3 completes. The re-arm rule assumes prompt replication; we have not yet measured data loss under failure. See [`QUESTIONS.md`](./QUESTIONS.md).
+The central systems question is therefore:
 
-## Competitive landscape (market research, Aug 2026)
+> Can a large population of durable agents coordinate heterogeneous, escalating
+> compute reliably and economically over time?
 
-The durable, self-hosted agent space splits into four layers. Protein lives in layer 2.
+A cube is valuable when it makes that operating model visible: agents wake,
+exchange artifacts, claim or challenge work, request stronger executors, survive
+runtime interruption, resolve conflicting changes, and hibernate again. Final
+task quality remains important, but so do recovery, duplicate suppression,
+provenance, resource escalation, utilization, cost, and the integrity of work
+across many interactions.
 
-1. **Heavyweight durable-execution platforms** — Temporal (~22k★, MIT), Windmill. Mature, cluster-based, shared DB, general-purpose. Operationally heavy; over-engineered for a bounded agent.
-2. **Lightweight durable-actor / step runtimes** — **Restate**, **Rivet**, DBOS, Inngest, Trigger.dev, Hatchet. Single-binary or library-shaped, minimal infra. **This is Protein's neighborhood.**
-3. **Agent frameworks** — LangGraph, Letta (MemGPT), Mastra, CrewAI, AutoGen, Agno, PydanticAI. Supply agent logic but assume an external durable home + scheduler you operate.
-4. **Sovereign/enterprise platforms & DIY** — Palantir AIP, Lyzr (packaged, accredited, lock-in); Dify/n8n (self-hosted app platforms); DIY Ollama+vLLM+Postgres+framework.
+The formal-protocol preflight rejected its nine independent mutations as an
+*intelligence benchmark* for a larger cube. It did not reject the cube as a
+systems demonstration. Its actual lesson is that a cube workload must contain
+coupled work, heterogeneous resource needs, and durable interactions whose value
+cannot be reduced to parallel enumeration.
 
-### Closest peers
+## First compute-fabric cube learnings — 2026-08-11
 
-| Peer | Self-hosted | Durable state | Where Protein wins | Where they win |
-|---|---|---|---|---|
-| **Cloudflare Agents SDK** | No (edge only) | Per-agent DO SQLite, hibernates | Self-hosted, no account, no `env.AI`, model-portable | Mature SDK, edge network, ecosystem |
-| **Restate** | Yes (BSL→Apache) | Virtual Objects (single-writer) + journal, no DB | Relational SQLite vs opaque KV; CF-DO-API compat; bounded-agent opinion | Far more mature, agent-first, multi-language, Restate Cloud |
-| **Rivet** | Yes (Apache-2.0) | Per-actor durable state + durable execution | Lighter; CF-DO-API portable | Most mature self-hosted DO-for-agents (~5.9k★), multi-maintainer, observability |
-| **Temporal** | Yes (MIT) | External shared DB, sharded by workflow id | Small bounded agent, per-agent private SQLite, no cluster | Battle-tested, polyglot, huge ecosystem |
-| **LangGraph** | Yes (bring your own) | Checkpoints you wire (Postgres/Redis) | Protein *is* the durable single-owner home LangGraph assumes | Graph ecosystem dwarfs celld's |
-| **Letta (MemGPT)** | Yes (run server + Postgres) | Self-editing memory blocks | Hibernating self-contained cell, no DB to run | Superior memory model, sleep-time compute |
+The first live `3×3×3` run passed with 27 durable identities and four execution
+tiers. The canonical evidence is
+`compute-fabric-openai-20260811071417338-2078129`.
 
-### The wedge (honest)
+Observed lessons:
 
-The capability combination Protein advertises is **largely already delivered** by Restate and Rivet, which are far more mature. What is genuinely unique is thin:
+- Cell-only work, model calls, bounded evaluators, and Linux sandboxes can share
+  one durable capability/receipt lineage without putting heavyweight execution
+  inside the cell.
+- Long model calls need leases sized for real provider latency. A lease adequate
+  for the mock executor caused reentrant claims in the live run.
+- A cell's inbox should be serialized even while the fleet remains concurrent.
+- Executor rejection is evidence, not an HTTP failure. Invalid generated source
+  must return a durable failed-check receipt so another agent can revise it.
+- Hibernation and outstanding-action crash recovery should be exercised as
+  distinct lifecycle phases. Resident pressure, not idle time alone, was the
+  reliable way to demonstrate hibernation on the small single-host fleet.
+- The useful interaction unit is an artifact, relationship, receipt, or
+  recovery decision. Raw message volume remains a poor success metric.
 
-1. celld is the only **distributed, self-hosted, Cloudflare-DO/Workers-API-compatible** runtime — existing DO/Workers agents port with little change (`workerd` is single-process only; Restate/Rivet have their own APIs).
-2. The opinionated **"small bounded agent, not a giant loop"** framing.
+The final run recorded 39 complete receipts, 348 Protein journal entries, 41
+typed relationships, 11 Luna calls, one reconciled duplicate dispatch, one
+terminated sandbox retry, one denied evaluator retry, and one resolved conflict
+between independently correct patches. All four accepted repairs passed hidden
+evaluation.
 
-Both are real but easily copied, and both sit on a very young foundation. Net: a narrow niche on an unproven substrate, not a wide-open category.
+## Celld substrate
 
-### Demand signals (who wants this)
+Primary sources:
 
-- **Regulated / sovereignty** (strongest): EU AI Act Article 10 + GDPR/HIPAA drive on-prem, auditable-agent demand. Cleanest wedge — durable, inspectable, self-hosted, every wake a SQLite row.
-- **Cost / "agent tax"**: enterprises alarmed by per-run/per-seat markup on managed agent platforms; Protein's bounded self-hosted model attacks that.
-- **Model portability**: "vendor lock-in at the model layer is harder to unwind than at the agent layer"; `fetch`-only/no-`env.AI` aligns precisely.
-- **BYO-Cloud**: practitioner demand (calv.info "Durable Objects are Made for Agents"; celld HN thread) to run the DO-agent model outside the Cloudflare account — Protein's most specific opening.
+- [celld repository](https://github.com/denoland/celld)
+- [official overview](https://github.com/denoland/celld/blob/553ae73f83c87c3f7c7a5f73c32c2211d9d7341f/docs/README.md)
+- [Cloudflare compatibility](https://github.com/denoland/celld/blob/553ae73f83c87c3f7c7a5f73c32c2211d9d7341f/docs/cloudflare-compat.md)
+- [limitations](https://github.com/denoland/celld/blob/553ae73f83c87c3f7c7a5f73c32c2211d9d7341f/docs/limitations.md)
+- [security model](https://github.com/denoland/celld/blob/553ae73f83c87c3f7c7a5f73c32c2211d9d7341f/docs/security.md)
+- [testing and performance](https://github.com/denoland/celld/blob/553ae73f83c87c3f7c7a5f73c32c2211d9d7341f/docs/testing.md)
+- [v0.1.0 release](https://github.com/denoland/celld/releases/tag/v0.1.0)
 
-Ideal buyer: an engineering team in fintech/legal-tech/health-tech (or a sovereignty-first EU org) that has *already decided* self-hosted-no-lock-in is the requirement and is choosing between Restate, Temporal, a DIY stack, or hand-rolling on Cloudflare — not the enterprise buyer who needs a packaged UI/RBAC/certs (that buyer goes to Lyzr or Palantir).
+Verified design facts:
 
-## Top risks
+- one named cell owns one private SQLite database;
+- cells share no database;
+- HTTP, RPC, inbound hibernatable WebSockets, outbound HTTP/WebSockets, and one
+  alarm are available;
+- handlers execute on one thread but may interleave while awaiting;
+- acknowledged writes are documented as gated on bucket durability;
+- cells may hibernate and restore from the operator-owned bucket;
+- no functional filesystem, subprocess, general TCP, queue service, workflow
+  service, blob binding, browser, email, or native AI service is present;
+- one fleet runs one application and operators provide ingress, TLS, auth,
+  private networking, secrets, monitoring, and updates.
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| celld is bus-factor-1 (~1 week old, PRs-by-email, no community plumbing) | **High** | Portable interface; isolate celld code; cultivate upstream relationship with Ry; document an off-celld migration path from day one |
-| celld's S3-no-consensus correctness is publicly disputed (Kleppmann-style critique on HN) | **High** | Independent correctness writeup; chaos/failover/partition tests that measure data loss; keep LTX exports as an escape hatch; market the failure model honestly |
-| Restate + Rivet already own self-hosted durable-actor-for-agents at maturity | **High** | Do not compete on generic durable execution. Compete narrowly on CF-DO-API compat + bounded-agent opinion; consider Restate/Rivet as *backends* via the portable interface |
-| "Bounded agent" is a convention, easily copied | Medium | Make it structural: bounded-step policy + durable file-based skills + evidence-backed runs (the Wire pattern) baked into the DX |
-| Missing fleet primitives (concurrency/fairness/observability) | Medium | Scope v1 to single-agent/small-fleet; build minimal observability on celld primitives; communicate bounded scope as the product |
-| Most defensible demand (sovereign/defense) routes to accredited vendors | Medium | Target regulated-but-open segment (fintech/legal/health) where auditable self-hosted agents suffice without government accreditation |
+Important disputed guarantee:
 
-## Source notes
+- [issue #132](https://github.com/denoland/celld/issues/132) reports overlapping
+  owner authority under clock skew. Treat one-writer as a celld claim pending
+  resolution and independent testing.
 
-Competitive and demand claims are directional, gathered Aug 2026 from official docs/GitHub plus practitioner posts and HN threads; vendor "rankings" and price tiers come from SEO-shaped comparison sites and should not be read as hard adoption data. Full source list is in the market-research transcript; key references: calv.info (Durable Objects are Made for Agents), the celld HN thread (id 49185430), Restate/Rivet/Temporal docs, Rasa/Lyzr/NeuralTrust sovereignty writeups.
+## Cloudflare Agents comparison
+
+Primary sources:
+
+- [Cloudflare Agents repository](https://github.com/cloudflare/agents)
+- [Agents architecture](https://developers.cloudflare.com/agents/)
+- [state](https://developers.cloudflare.com/agents/runtime/lifecycle/state/)
+- [scheduling](https://developers.cloudflare.com/agents/runtime/execution/schedule-tasks/)
+- [WebSockets](https://developers.cloudflare.com/agents/runtime/communication/websockets/)
+- [harnesses](https://developers.cloudflare.com/agents/harnesses/)
+- [Agents and Workflows](https://developers.cloudflare.com/agents/concepts/workflows/)
+
+The important conceptual agreement is the split between:
+
+- durable runtime: identity, SQL, connections, schedules, recovery;
+- harness: prompts, models, tools, streams, and continuation policy.
+
+Protein follows that split. Its executable compatibility findings are in
+[COMPATIBILITY.md](./COMPATIBILITY.md).
+
+## Alternatives pressure test
+
+Primary documentation reviewed:
+
+- [Restate virtual objects and sessions](https://docs.restate.dev/ai/patterns/sessions)
+- [Restate durable timers](https://docs.restate.dev/develop/ts/durable-timers)
+- [Rivet actor lifecycle](https://rivet.dev/docs/actors/lifecycle/)
+- [Rivet actor queues](https://rivet.dev/docs/actors/queues/)
+- [Temporal documentation](https://docs.temporal.io/)
+- [AWS EventBridge Scheduler quotas](https://docs.aws.amazon.com/scheduler/latest/UserGuide/scheduler-quotas.html)
+
+Conclusions:
+
+- Cron plus a shared database wins for a small fixed set of jobs.
+- A normal process wins continuous, library-heavy, artifact-heavy work.
+- Temporal wins finite workflows with rich signals, retries, compensation, and
+  operational tooling.
+- Restate and Rivet already cover much of the keyed durable actor story.
+- Managed serverless scheduling makes “many timers” insufficient as a product
+  thesis.
+- Celld's meaningful wedge is the combination of Workers/Durable Objects
+  familiarity, private per-cell SQLite, hibernation, and self-hosting.
+
+## Product learning
+
+The initial design overfit scheduled case shepherds. The 100-use-case library
+showed that many jobs can be represented as sleeping state machines, but it did
+not establish demand for celld or Protein.
+
+The corrected demand unit is a fleet of independently addressed agents owned by
+an embedding product. The reference RepoAgent is valuable because it exercises
+that unit while making the external executor boundary explicit.
+
+## Evidence policy
+
+Documents distinguish:
+
+- celld project claims;
+- Cloudflare or competitor product claims;
+- locally reproduced observations;
+- unresolved hypotheses.
+
+Local numbers always record the binary/package versions and environment. They
+must not be generalized into production SLAs.

@@ -1,0 +1,17 @@
+{
+  "name": "protein-repo-agent",
+  "main": "dist/worker.js",
+  "compatibility_date": "2026-08-09",
+  "durable_objects": {
+    "bindings": [
+      { "name": "REPO_AGENT", "class_name": "RepoAgent" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RepoAgent"] }
+  ],
+  "vars": {
+    "EXECUTOR_URL": "http://127.0.0.1:19100",
+    "PROTEIN_LEASE_MS": "120000"
+  }
+}

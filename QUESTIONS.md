@@ -1,43 +1,179 @@
-# QUESTIONS — to resolve before/while building
+# Open questions and blockers
 
-What we need answered before committing serious effort. Grouped by theme; each marked **[BLOCKER]** (resolve before writing core code) or **[DECIDE]** (resolve before v1 ships) or **[VALIDATE]** (resolve before claiming product-market fit).
+Protein is an executable prototype. The items below separate demonstrated
+behavior from the claims that remain unsafe to make.
 
-## Foundation risk (celld)
+## P0 — correctness and production blockers
 
-- **[BLOCKER]** If Ryan Dahl / Deno Land deprioritize celld within 12 months, what is the concrete fallback? Is the actor/storage/alarm interface genuinely swappable to Restate, Rivet, or `workerd` without rewriting agents? — *Decide by prototyping the portable interface against a second backend early.*
-- **[BLOCKER]** Can celld's S3-no-consensus replication pass an independent correctness review and a failover/chaos/partition load test that measures actual data loss? The entire durability pitch inherits this doubt.
-- **[VALIDATE]** How fast does celld actually mature — contributor base, community (Discord/Discussions), roadmap execution (D1/Queues)? Set a checkpoint (e.g., 3–6 months) to reassess commitment.
+### 1. Can celld `0.1.0` maintain one active owner in the tested skew window?
 
-## Scope & positioning
+Celld documents one writer per cell, but open issue
+[`denoland/celld#132`](https://github.com/denoland/celld/issues/132) reports an
+overlap between old and new owner authority under clock skew. Protein's local
+revision fences do not fix two concurrently authoritative nodes writing or
+calling tools.
 
-- **[VALIDATE]** How large is the audience that specifically wants to *migrate existing Cloudflare DO/Workers agents off the edge* — vs. just staying on Cloudflare or picking Restate/Rivet? Quantify before betting the wedge on CF-API compatibility.
-- **[VALIDATE]** Do real buyers want the "deliberately small bounded agent," or do they gravitate toward the giant exploratory loops LangGraph/CrewAI enable? Validate with paying design partners, not philosophy.
-- **[VALIDATE]** Who is the first design-partner customer, and is their need "a self-hosted durable agent" (where Restate/Rivet already win) or specifically "run my Cloudflare DO code on my own metal" (Protein's narrow edge)?
-- **[DECIDE]** Does Protein ship enough fleet primitives (concurrency, fairness, observability) to be viable beyond single-agent — or is it permanently scoped to one-cell-at-a-time, and is *that* market big enough?
-- **[DECIDE]** Is "no `env.AI` / fetch-only" a real buying criterion, or do users actually prefer the convenience of a binding — making it a non-differentiator?
+**Answered for the tested topology: no.** The two-node harness isolated A from
+peers and the object store, shifted B's wall clock forward by 9 seconds against
+a 12-second TTL, and observed both nodes serve the same cell. Both reached
+`action.dispatch_started`; an external idempotency key contained the two calls
+to one job. State converged after healing. See [PROOFS.md](./PROOFS.md).
 
-## Demand / market
+Required resolution evidence:
 
-- **[VALIDATE]** Does EU AI Act / sovereignty demand actually convert to *open-runtime* adoption, or do regulated buyers default to Palantir/Lyzr packaged products regardless of openness and licensing?
-- **[VALIDATE]** Is the cost / "agent tax" pain strong enough that buyers adopt a new runtime, or do they just hand-roll a DIY stack (Ollama+vLLM+Postgres+framework)?
+- upstream resolution or a verified operational bound;
+- the same executable harness passing against the candidate release;
+- a documented safe skew/fencing model and operational bound.
 
-## Technical unknowns
+Until then, do not use Protein as the primary control for high-stakes effects.
 
-- **[BLOCKER]** What is the real durability window — how long between a SQLite write and its LTX replication to S3, and what happens to in-flight steps under node failure? Until measured, assume any step can be replayed and design idempotency accordingly.
-- **[DECIDE]** Does `ctx.storage.sql.exec` reliably return iterable column-keyed rows across celld builds (verified in source today), and is the SQL feature set (transactions, indexes, the full SQLite surface) complete enough for our DNA schema? Pin this with a test.
-- **[DECIDE]** How do we keep alive an inbound hibernatable WebSocket without `setWebSocketAutoResponse` (absent, issue #123)? Implement keepalive inside `webSocketMessage`/`alarm`, or accept shorter-lived sessions?
-- **[DECIDE]** Where do artifact *bytes* live, given R2 is unusable from a Worker? Caller-owned S3/MinIO, or a sibling process? Define the artifact contract before agents start emitting evidence.
-- **[DECIDE]** Multi-cell composition: do we standardize a planner/worker pattern (cells addressing cells by name + shared nothing), or stay single-cell for v1 and let users compose themselves?
+### 2. What is the precise crash envelope around external actions?
 
-## Product & DX
+**Answered for the implemented lifecycle.** The deterministic matrix now kills
+celld at intent, claim, request arrival, remote acceptance, returned response,
+and receipt/outcome boundaries. Idempotent and reconcilable effects converged.
+Unsafe protection failed at the exact committed dispatch marker and both tested
+post-dispatch points because bucket recovery lost the local marker. Even the
+checkpoint after the receipt/outcome transaction produced idempotent
+redelivery. See
+[PROOFS.md](./PROOFS.md).
 
-- **[DECIDE]** What is the minimum `Protein` developer experience? Target: write one `step()` method, `celld deploy`, point at an LLM, done. What gets in the way of that today?
-- **[DECIDE]** Language/SDK surface: TypeScript-only at first (celld is V8/JS), or do we design the contract to be language-agnostic from the start (Restate/Rivet are multi-language)?
-- **[DECIDE]** Observability story without a managed platform: what do we build on celld's alarm/SQLite primitives so a developer can see what their agent is doing?
-- **[VALIDATE]** Licensing & governance of Protein itself (MIT/Apache?), and whether "self-hosted, no lock-in" needs to be reinforced by a license that blocks a competing managed wrapper.
+The remaining blocker is architectural rather than missing fault injection:
 
-## Immediate next actions
+- require idempotent or authoritative reconciliation contracts;
+- reject automatic unsafe effects, or add an external effect broker;
+- obtain celld replication acknowledgement and ownership fencing primitives.
 
-1. Prototype the **portable `ProteinDna` + `ActorRuntime` interface** with two backends (celld + one of Restate/Rivet) — de-risks the #1 foundation risk.
-2. Stand up a **local celld** and run the `RUNTIME.md` example end-to-end against a real LLM `fetch` — proves the verified API set in practice.
-3. Write a **failover/partition test** that measures data loss on a mid-step crash — answers the durability-window blocker.
+#### Cross-cell operation namespace
+
+Action IDs are primary keys only inside one cell, while the current base class
+passes the raw action ID as `ActionExecutionContext.idempotencyKey`. Two cells
+can therefore alias one logical job at a shared receiver if they choose the
+same local ID. Architecture v1 requires an operation identity namespaced by
+deployment, Durable Object class, cell identity, and local action ID. This must
+be enforced in Protein or every shared capability adapter before the capability
+contract is considered complete.
+
+### 3. Are alarm recovery and repair sufficient after every hard interruption?
+
+Protein multiplexes pending work and leases onto one alarm. Validate:
+
+- fired alarm before claim;
+- claim before decision;
+- event decision before action alarm reconciliation;
+- expired event/action leases;
+- celld's finite platform alarm retry exhaustion;
+- orphan wake entries after node loss.
+
+### 4. How are authentication, authorization, and secrets provided?
+
+Celld does not terminate public TLS or authenticate end users. Protein currently
+accepts application requests and stores compact JSON without an auth policy.
+
+A production embedding needs:
+
+- authenticated ingress and deterministic agent-name authorization;
+- tenant-aware rate limits and payload ceilings;
+- secret references rather than secret values in cell state;
+- executor authentication and scoped capabilities;
+- audit redaction and retention.
+
+### 5. Is current celld safe for the intended tenancy model?
+
+Celld explicitly describes the current alpha as unsafe for hostile
+multitenancy. One fleet also runs one application. User-supplied Worker code,
+untrusted generated code, and arbitrary executor credentials are out of scope
+until the isolation model changes.
+
+## P1 — runtime completeness
+
+### 6. What is the cancellation and steering protocol?
+
+Cancellation should be a durable event that advances the run revision and
+prevents later decisions from committing. It cannot retract an external action
+already accepted. Define idempotent cancel, terminal precedence, and WebSocket
+steering semantics.
+
+### 7. How should human approval work?
+
+Approval belongs between committed action intent and dispatch. Define:
+
+- action states `awaiting_approval`, `approved`, and `rejected`;
+- who may approve;
+- expiry and revocation;
+- stable approval evidence;
+- whether payload changes invalidate approval.
+
+### 8. How are schema and application state migrated?
+
+Runtime schema version 2 includes one in-place migration that adds the action
+dispatch marker. This is evidence for the mechanism, not a general upgrade
+framework. Application `initialState` is not a migration mechanism. Define
+ordered runtime migrations, application migration hooks, rollback behavior,
+and large-fleet rollout safety.
+
+### 9. What is the reconciliation API?
+
+`reconcilable` now calls the distinct `reconcileAction()` hook before every
+dispatch. The remaining contract work should distinguish:
+
+- `dispatch(action)`;
+- `lookup(idempotencyKey)`;
+- retryable absence;
+- authoritative delivered/failed state.
+
+### 10. How are journal and state retained?
+
+Define per-table limits, compaction, export, deletion, legal hold, and state
+size budgets. Large workspaces, logs, prompts, patches, and artifacts must stay
+outside the cell.
+
+### 11. What are the WebSocket recovery guarantees?
+
+Test hibernation, reconnect cursors, owner movement, duplicate client messages,
+and connection authorization. Current frames provide live state, not a durable
+stream protocol.
+
+## P1 — fleet and product blockers
+
+### 12. Who provisions and indexes agents?
+
+Cells share no database. Protein can address a known name but cannot list every
+tenant, query all active runs, or enforce global quotas. The embedding product
+needs a control-plane index or a deliberately sharded registry.
+
+### 13. What is the real steady-state fleet cost?
+
+The 1,000-cell activation passes with the small runtime, but measurements still
+need forced hibernation, reactivation, real object storage, heterogeneous
+alarms, WebSockets, and non-empty state. Peak activation throughput is not the
+same as cheap steady state.
+
+### 14. How are global budgets and fairness enforced?
+
+Per-cell budgets do not prevent one tenant from activating many cells or
+consuming executor/model capacity. Define admission, global rate limits,
+backpressure, and executor quotas outside the cells.
+
+### 15. Is Protein a library, compatibility profile, or upstream patch set?
+
+The current minimal runtime is useful evidence. Design-partner work must decide
+whether the durable inbox/outbox belongs:
+
+- in Protein as a library;
+- upstream in celld examples or Workflows;
+- upstream in a modular Cloudflare Agents core;
+- in an application-specific RepoAgent service.
+
+## Closed by the current implementation
+
+- **Is a Codex process native inside celld?** No. Filesystem and shell execution
+  require an external executor.
+- **Can current Cloudflare Agents run at all?** Partially. State, schedules, and
+  WebSockets pass with a prebundle workaround.
+- **Can its queue safely drive awaited celld work?** No in the tested version;
+  detached flushing abandons the async continuation.
+- **Should Protein extend the full Agent class?** No for the current fleet
+  premise. The 1,000-cell comparison rejected its bundle/residency cost.
+- **Can a minimal runtime complete 1,000 named-cell activations?** Yes in the
+  recorded local test; this is not yet a production capacity claim.

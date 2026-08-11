@@ -1,0 +1,47 @@
+{
+  "name": "protein",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A minimal celld-native runtime for durable agent actors.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "npm run typecheck && npm test",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:celld": "node scripts/celld-e2e.mjs",
+    "test:crash-matrix": "node scripts/action-crash-matrix.mjs",
+    "test:ownership-chaos": "node scripts/ownership-chaos.mjs",
+    "test:proofs": "node scripts/proof-suite.mjs",
+    "swarm:dev": "node examples/cellular-agent-swarm/local-server.mjs",
+    "swarm:sim": "node examples/cellular-agent-swarm/local-server.mjs",
+    "swarm:capabilities": "node examples/cellular-agent-swarm/capability-server.mjs",
+    "swarm:celld": "node scripts/swarm-celld-run.mjs",
+    "swarm:openai": "SWARM_RUNTIME_MODE=openai node scripts/swarm-celld-run.mjs",
+    "swarm:compare": "node scripts/swarm-celld-compare.mjs",
+    "swarm:cost-target": "SWARM_COMPARISON_OBJECTIVE=cost_to_fixed_verified_quality node scripts/swarm-celld-compare.mjs",
+    "swarm:compare:rebuild": "node scripts/swarm-comparison-rebuild.mjs",
+    "swarm:build": "esbuild examples/cellular-agent-swarm/worker.ts --bundle --format=esm --platform=neutral --target=es2022 --main-fields=module,main --conditions=workerd,worker,browser --outfile=examples/cellular-agent-swarm/dist/worker.js --external:cloudflare:* --external:node:* --alias:path=node:path",
+    "probe:build": "esbuild probes/cloudflare-agents/worker.ts --bundle --format=esm --platform=neutral --target=es2022 --main-fields=module,main --conditions=workerd,worker,browser --outfile=probes/cloudflare-agents/dist/worker.js --external:cloudflare:* --external:node:* --alias:path=node:path",
+    "example:build": "esbuild examples/repo-agent/worker.ts --bundle --format=esm --platform=neutral --target=es2022 --main-fields=module,main --conditions=workerd,worker,browser --outfile=examples/repo-agent/dist/worker.js --external:cloudflare:* --external:node:* --alias:path=node:path",
+    "example:mock-executor": "node scripts/mock-executor.mjs"
+    ,"maintenance:run": "OPENAI_MODEL=gpt-5.6-luna node scripts/repo-maintenance-run.mjs",
+    "maintenance:compare": "OPENAI_MODEL=gpt-5.6-luna node scripts/repo-maintenance-compare.mjs"
+    ,"formal:run": "OPENAI_MODEL=gpt-5.6-luna node scripts/formal-protocol-run.mjs",
+    "formal:check": "node scripts/formal-protocol-check.mjs"
+    ,"formal:conformance:audit": "node scripts/formal-conformance-audit.mjs"
+    ,"cube:check": ".protein/tools/z3-venv/bin/python examples/formal-protocol-swarm/preflight_solver.py"
+    ,"cube:preflight": "OPENAI_MODEL=gpt-5.6-luna node scripts/cube-preflight-run.mjs"
+    ,"fabric:build": "esbuild examples/compute-fabric-cube/worker.ts --bundle --format=esm --platform=neutral --target=es2022 --main-fields=module,main --conditions=workerd,worker,browser --outfile=examples/compute-fabric-cube/dist/worker.js --external:cloudflare:* --external:node:* --alias:path=node:path"
+    ,"fabric:run": "OPENAI_MODEL=gpt-5.6-luna node scripts/compute-fabric-run.mjs"
+    ,"fabric:audit": "node scripts/compute-fabric-audit.mjs"
+    ,"fabric:logs": "node scripts/compute-fabric-log-audit.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260809.1",
+    "agents": "0.20.1",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

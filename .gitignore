@@ -4,6 +4,7 @@ node_modules/
 # build output
 dist/
 build/
+coverage/
 
 # env / secrets
 .env
@@ -15,10 +16,13 @@ build/
 .wrangler/
 .deno/
 *.tsbuildinfo
+__pycache__/
+*.py[cod]
 
 # celld local state
 celld-data/
 *.ltx
+.protein/
 
 # logs / os
 *.log

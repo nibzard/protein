@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "id": "protein-cube-preflight/v1",
+  "frozenBeforeModelRuns": true,
+  "model": "gpt-5.6-luna",
+  "budgets": { "callsPerCondition": 12, "maxOutputTokensPerCall": 1800 },
+  "cubeGate": {
+    "centralizedMissesMutation": true,
+    "layeredBeatsCentralized": true,
+    "causalNeighborArtifact": true,
+    "crossColumnIntegrationConflict": true,
+    "solverEnumerationAtLeastMs": 1000
+  },
+  "mutations": [
+    {
+      "id": "ambiguous_retry", "column": "ambiguity", "description": "An applied-but-unreceipted action is retried directly.",
+      "nodes": ["pending", "ambiguous_applied", "duplicate_effect", "reconciled"], "initial": "pending", "bad": ["duplicate_effect"], "goals": ["reconciled"],
+      "edges": [{"label":"timeout_applied","from":"pending","to":"ambiguous_applied"},{"label":"retry","from":"ambiguous_applied","to":"duplicate_effect"},{"label":"reconcile","from":"ambiguous_applied","to":"reconciled"}],
+      "patches": [{"id":"p0","description":"Disable direct retry until reconciliation.","disable":["retry"]},{"id":"p1","description":"Disable reconciliation.","disable":["reconcile"]},{"id":"p2","description":"No semantic change.","disable":["missing"]}]
+    },
+    {
+      "id": "receipt_without_effect", "column": "receipts", "description": "A receipt can be committed before any external effect exists.",
+      "nodes": ["pending", "receipt_only", "effect_and_receipt"], "initial": "pending", "bad": ["receipt_only"], "goals": ["effect_and_receipt"],
+      "edges": [{"label":"early_receipt","from":"pending","to":"receipt_only"},{"label":"dispatch_commit","from":"pending","to":"effect_and_receipt"}],
+      "patches": [{"id":"p0","description":"Require effect evidence before receipt commit.","disable":["early_receipt"]},{"id":"p1","description":"Disable valid dispatch.","disable":["dispatch_commit"]},{"id":"p2","description":"Leave both paths enabled.","disable":[]}]
+    },
+    {
+      "id": "effect_without_receipt", "column": "receipts", "description": "A successful effect can become terminal without a durable receipt.",
+      "nodes": ["pending", "effect_only", "effect_and_receipt"], "initial": "pending", "bad": ["effect_only"], "goals": ["effect_and_receipt"],
+      "edges": [{"label":"drop_receipt","from":"pending","to":"effect_only"},{"label":"atomic_outcome","from":"pending","to":"effect_and_receipt"}],
+      "patches": [{"id":"p0","description":"Require the receipt/outcome transaction.","disable":["drop_receipt"]},{"id":"p1","description":"Disable the atomic outcome.","disable":["atomic_outcome"]},{"id":"p2","description":"No guard.","disable":[]}]
+    },
+    {
+      "id": "stale_reconciliation", "column": "recovery", "description": "A stale negative lookup permits redispatch after the effect occurred.",
+      "nodes": ["ambiguous_applied", "stale_negative", "duplicate_effect", "authoritative_commit"], "initial": "ambiguous_applied", "bad": ["duplicate_effect"], "goals": ["authoritative_commit"],
+      "edges": [{"label":"stale_lookup","from":"ambiguous_applied","to":"stale_negative"},{"label":"redispatch","from":"stale_negative","to":"duplicate_effect"},{"label":"authoritative_lookup","from":"ambiguous_applied","to":"authoritative_commit"}],
+      "patches": [{"id":"p0","description":"Require an authoritative lookup and disable stale redispatch.","disable":["stale_lookup","redispatch"]},{"id":"p1","description":"Disable only the authoritative path.","disable":["authoritative_lookup"]},{"id":"p2","description":"Disable stale lookup but also valid commit.","disable":["stale_lookup","authoritative_lookup"]}]
+    },
+    {
+      "id": "overlapping_lease", "column": "identity", "description": "Lease expiry starts a second dispatch while the first remains live.",
+      "nodes": ["one_owner", "overlap", "double_dispatch", "fenced"], "initial": "one_owner", "bad": ["double_dispatch"], "goals": ["fenced"],
+      "edges": [{"label":"expire_while_live","from":"one_owner","to":"overlap"},{"label":"second_dispatch","from":"overlap","to":"double_dispatch"},{"label":"receiver_fence","from":"one_owner","to":"fenced"}],
+      "patches": [{"id":"p0","description":"Fence receiver effects by stable action identity.","disable":["expire_while_live","second_dispatch"]},{"id":"p1","description":"Shorten the lease.","disable":["receiver_fence"]},{"id":"p2","description":"Disable only the second edge while allowing untracked overlap.","disable":["second_dispatch","receiver_fence"]}]
+    },
+    {
+      "id": "stale_owner_commit", "column": "identity", "description": "A stale owner commits after a newer owner has completed.",
+      "nodes": ["owner_a", "owner_b_complete", "dual_commit", "epoch_fenced"], "initial": "owner_a", "bad": ["dual_commit"], "goals": ["epoch_fenced"],
+      "edges": [{"label":"transfer","from":"owner_a","to":"owner_b_complete"},{"label":"stale_commit","from":"owner_b_complete","to":"dual_commit"},{"label":"epoch_fence","from":"owner_a","to":"epoch_fenced"}],
+      "patches": [{"id":"p0","description":"Fence commits by ownership epoch.","disable":["transfer","stale_commit"]},{"id":"p1","description":"Allow stale commit.","disable":["epoch_fence"]},{"id":"p2","description":"Disable the final stale edge but remove the safe goal.","disable":["stale_commit","epoch_fence"]}]
+    },
+    {
+      "id": "cancellation_race", "column": "identity", "description": "Cancellation is accepted while an external effect is completing.",
+      "nodes": ["dispatching", "cancelled", "effect_after_cancel", "cancel_reconciled"], "initial": "dispatching", "bad": ["effect_after_cancel"], "goals": ["cancel_reconciled"],
+      "edges": [{"label":"blind_cancel","from":"dispatching","to":"cancelled"},{"label":"late_effect","from":"cancelled","to":"effect_after_cancel"},{"label":"reconcile_cancel","from":"dispatching","to":"cancel_reconciled"}],
+      "patches": [{"id":"p0","description":"Reconcile in-flight effects before terminal cancellation.","disable":["blind_cancel","late_effect"]},{"id":"p1","description":"Disable reconciliation.","disable":["reconcile_cancel"]},{"id":"p2","description":"Disable only late effect and safe reconciliation.","disable":["late_effect","reconcile_cancel"]}]
+    },
+    {
+      "id": "payload_identity_conflict", "column": "identity", "description": "The same action ID is reused with a different canonical payload.",
+      "nodes": ["original", "conflicting_payload", "wrong_effect", "conflict_rejected"], "initial": "original", "bad": ["wrong_effect"], "goals": ["conflict_rejected"],
+      "edges": [{"label":"reuse_id","from":"original","to":"conflicting_payload"},{"label":"dispatch_conflict","from":"conflicting_payload","to":"wrong_effect"},{"label":"canonical_compare","from":"original","to":"conflict_rejected"}],
+      "patches": [{"id":"p0","description":"Reject identity reuse with different canonical content.","disable":["reuse_id","dispatch_conflict"]},{"id":"p1","description":"Skip canonical comparison.","disable":["canonical_compare"]},{"id":"p2","description":"Disable wrong dispatch but eliminate rejection evidence.","disable":["dispatch_conflict","canonical_compare"]}]
+    },
+    {
+      "id": "recovery_rollback", "column": "recovery", "description": "Recovery restores a version older than an accepted receipt.",
+      "nodes": ["receipt_committed", "older_replica", "redispatched", "receipt_restored"], "initial": "receipt_committed", "bad": ["redispatched"], "goals": ["receipt_restored"],
+      "edges": [{"label":"restore_old","from":"receipt_committed","to":"older_replica"},{"label":"dispatch_again","from":"older_replica","to":"redispatched"},{"label":"restore_receipt","from":"receipt_committed","to":"receipt_restored"}],
+      "patches": [{"id":"p0","description":"Require recovery at or beyond the accepted receipt version.","disable":["restore_old","dispatch_again"]},{"id":"p1","description":"Discard the receipt path.","disable":["restore_receipt"]},{"id":"p2","description":"Disable only redispatch and the valid recovery goal.","disable":["dispatch_again","restore_receipt"]}]
+    }
+  ]
+}

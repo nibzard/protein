@@ -1,0 +1,17 @@
+{
+  "name": "protein-compute-fabric-cube",
+  "main": "dist/worker.js",
+  "compatibility_date": "2026-08-10",
+  "durable_objects": {
+    "bindings": [
+      { "name": "FABRIC_CELL", "class_name": "FabricCell" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["FabricCell"] }
+  ],
+  "vars": {
+    "CAPABILITY_URL": "http://127.0.0.1:19602",
+    "PROTEIN_LEASE_MS": "120000"
+  }
+}

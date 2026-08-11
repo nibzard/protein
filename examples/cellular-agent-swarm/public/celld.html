@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Read-only paired comparison and runtime evidence from Protein cellular-agent runs on celld.">
+    <title>Protein — celld Evidence Report</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body class="runtime-report">
+    <a class="skip-link" href="#runtime-overview">Skip to runtime evidence</a>
+    <header class="topbar">
+      <a class="wordmark" href="/celld.html" aria-label="Protein celld runtime evidence">
+        <span class="wordmark-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span>PROTEIN <b>/</b> CELLD</span>
+      </a>
+      <div class="topbar-status" aria-live="polite">
+        <span class="status-dot" id="runtime-dot"></span>
+        <span id="runtime-status">Loading evidence</span>
+      </div>
+      <div class="topbar-meta">READ-ONLY EVIDENCE BUNDLES</div>
+    </header>
+
+    <aside class="mode-disclosure runtime-disclosure" aria-label="Evidence boundary">
+      <strong id="evidence-mode-label">Real celld runtime</strong>
+      <span id="evidence-mode-copy">This report reads the latest completed bundle; it does not run the experiment.</span>
+      <a class="disclosure-link" href="/">Open scripted scenario →</a>
+    </aside>
+
+    <main id="runtime-overview">
+      <section class="runtime-hero" aria-labelledby="runtime-title">
+        <div class="runtime-hero-copy">
+          <p class="claim-label observed">Runtime observed</p>
+          <h1 id="runtime-title">Durable cells,<br>measured.</h1>
+          <p class="lede" id="runtime-lede">Loading the latest run’s measured scope…</p>
+          <div class="runtime-actions">
+            <button class="button primary" id="refresh-button" type="button">Refresh latest bundle</button>
+            <a class="button secondary button-link" href="/api/celld/latest" target="_blank" rel="noreferrer">Open raw summary</a>
+            <a class="button secondary button-link" id="comparison-json-link" href="/api/celld/comparison/latest" target="_blank" rel="noreferrer" hidden>Open paired summary</a>
+          </div>
+        </div>
+        <aside class="run-identity" aria-labelledby="run-identity-title">
+          <div class="run-identity-head">
+            <span class="brief-index">EVIDENCE / 01</span>
+            <span class="run-result" id="run-result">—</span>
+          </div>
+          <h2 id="run-identity-title">Latest celld run</h2>
+          <dl>
+            <div><dt>Run</dt><dd id="run-id">—</dd></div>
+            <div><dt>Evidence</dt><dd id="evidence-level">—</dd></div>
+            <div><dt>Runtime</dt><dd id="celld-version">—</dd></div>
+            <div><dt>Completed</dt><dd id="completed-at">—</dd></div>
+          </dl>
+        </aside>
+      </section>
+
+      <section class="neighbor-answer-section" aria-labelledby="neighbor-answer-title">
+        <div class="neighbor-answer-shell">
+          <header class="neighbor-question">
+            <p class="claim-label" id="comparison-evidence-label">Checking paired evidence</p>
+            <h2 id="neighbor-answer-title">Did neighbor exchange help?</h2>
+            <p id="comparison-boundary">Loading the comparison claim boundary…</p>
+          </header>
+          <article class="neighbor-verdict pending" id="neighbor-verdict" aria-live="polite">
+            <span id="neighbor-verdict-label">EVIDENCE PENDING</span>
+            <strong id="neighbor-verdict-answer">Loading matched trials…</strong>
+            <p id="neighbor-verdict-claim">The report will not infer an advantage from one run.</p>
+            <aside class="neighbor-efficiency" aria-label="Secondary descriptive efficiency observation">
+              <span id="neighbor-observation-label">Secondary / descriptive</span>
+              <p id="neighbor-efficiency-copy">Efficiency deltas are not available yet.</p>
+            </aside>
+          </article>
+          <div class="comparison-fact-strip" id="comparison-facts" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="runtime-metrics-section" aria-labelledby="metrics-title">
+        <div class="section-heading compact">
+          <div>
+            <p class="section-kicker">Measured runtime</p>
+            <h2 id="metrics-title">What celld did</h2>
+          </div>
+          <p class="section-summary" id="claim-boundary">Loading the recorded claim boundary…</p>
+        </div>
+        <div class="metric-grid" id="metric-grid" aria-live="polite"></div>
+        <aside class="runtime-signal" id="runtime-signal" aria-live="polite"></aside>
+      </section>
+
+      <section class="paired-detail-section" aria-labelledby="paired-detail-title">
+        <div class="section-heading compact">
+          <div>
+            <p class="section-kicker">Matched evidence</p>
+            <h2 id="paired-detail-title">Trial variation and spend</h2>
+          </div>
+          <p class="section-summary" id="paired-detail-summary">Local and isolated runs are comparable only when the model, benchmark, topology, and budgets match.</p>
+        </div>
+
+        <aside class="comparison-pending" id="comparison-pending">
+          <strong>The counterpart run is still missing.</strong>
+          <p>The paired runner will populate this section only after matched local and isolated conditions finish under the same frozen controls.</p>
+        </aside>
+
+        <div class="comparison-control-band" id="comparison-config" aria-label="Recorded comparison controls" hidden></div>
+
+        <div class="table-wrap comparison-trial-wrap" id="comparison-trials" hidden>
+          <table class="runtime-table comparison-trial-table">
+            <thead id="comparison-trial-head">
+              <tr>
+                <th>Trial</th>
+                <th>Best score<br><span>local / isolated</span></th>
+                <th>Paired effect</th>
+                <th>Responses tokens<br><span>local / isolated</span></th>
+                <th>Tool executions<br><span>local / isolated</span></th>
+                <th>Fallbacks<br><span>local / isolated</span></th>
+                <th>Elapsed<br><span>local / isolated</span></th>
+                <th>Outcome</th>
+              </tr>
+            </thead>
+            <tbody id="comparison-trial-body"></tbody>
+          </table>
+        </div>
+
+        <div class="comparison-analysis-layout" id="comparison-analysis" hidden>
+          <figure class="comparison-curve-panel" aria-labelledby="comparison-curve-title">
+            <figcaption>
+              <div>
+                <strong id="comparison-curve-title">Best verified score by generation</strong>
+                <small id="comparison-curve-summary">Median across passed matched trials; bands show observed trial range.</small>
+              </div>
+              <span class="comparison-chart-key" id="comparison-chart-key"><i class="local"></i>Local <i class="isolated"></i>Isolated</span>
+            </figcaption>
+            <svg id="comparison-score-chart" viewBox="0 0 760 330" role="img" aria-label="Local and isolated best verified score by generation"></svg>
+          </figure>
+          <aside class="comparison-spend-panel" aria-labelledby="comparison-spend-title">
+            <div class="panel-heading">
+              <h3 id="comparison-spend-title">Accounted spend</h3>
+              <span id="comparison-spend-meta">all displayed trials</span>
+            </div>
+            <div id="comparison-spend"></div>
+          </aside>
+        </div>
+
+        <section class="lineage-section" id="comparison-lineage" aria-labelledby="lineage-title" hidden>
+          <div class="lineage-heading">
+            <div>
+              <h3 id="lineage-title">Candidate propagation</h3>
+              <p>Compact board-snapshot lineage. A repeated candidate hash shows verified work spreading; it does not by itself prove that the spread improved quality.</p>
+            </div>
+            <span id="lineage-coverage">Checking lineage…</span>
+          </div>
+          <div class="lineage-grid" id="lineage-grid"></div>
+        </section>
+      </section>
+
+      <section class="generation-section" aria-labelledby="generation-title">
+        <div class="section-heading compact">
+          <div>
+            <p class="section-kicker">Settled generations</p>
+            <h2 id="generation-title">Execution timing</h2>
+          </div>
+          <p class="section-summary">Cell latency measures dispatch-to-settlement in this local smoke run. It is runtime evidence, not a comparison against another architecture.</p>
+        </div>
+        <div class="table-wrap">
+          <table class="runtime-table">
+            <thead>
+              <tr><th>Generation</th><th>Settled cells</th><th>Elapsed</th><th>Cell p50</th><th>Cell p95</th><th>Best evaluator score</th></tr>
+            </thead>
+            <tbody id="generation-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="cell-state-section" aria-labelledby="cell-state-title">
+        <div class="section-heading compact">
+          <div>
+            <p class="section-kicker">Recovered state</p>
+            <h2 id="cell-state-title">Protein cells</h2>
+          </div>
+          <p class="section-summary" id="cell-state-summary">Each tile is projected from that cell’s final durable state and action records.</p>
+        </div>
+        <div class="runtime-cell-grid" id="runtime-cell-grid" role="list" aria-live="polite"></div>
+      </section>
+
+      <section class="evidence-streams" aria-labelledby="evidence-streams-title">
+        <div class="section-heading compact">
+          <div>
+            <p class="section-kicker">Raw evidence</p>
+            <h2 id="evidence-streams-title">Milestones and logs</h2>
+          </div>
+          <p class="section-summary">These views are derived from <code>timeline.jsonl</code> and the captured celld process log in the same completed run directory.</p>
+        </div>
+        <details class="evidence-disclosure">
+          <summary>
+            <span>Inspect raw run evidence</span>
+            <small>Milestones and the latest 80 captured log lines · collapsed by default</small>
+          </summary>
+          <div class="evidence-layout">
+            <section class="milestone-panel" aria-labelledby="milestone-title">
+              <div class="panel-heading">
+                <h3 id="milestone-title">Run milestones</h3>
+                <span>newest first</span>
+              </div>
+              <ol class="milestone-list" id="milestone-list"></ol>
+            </section>
+            <section class="log-panel" aria-labelledby="log-title">
+              <div class="panel-heading">
+                <h3 id="log-title">celld log tail</h3>
+                <span id="log-count">—</span>
+              </div>
+              <pre id="celld-log">Loading log tail…</pre>
+            </section>
+          </div>
+        </details>
+      </section>
+    </main>
+
+    <footer>
+      <span>PROTEIN / CELLD RUNTIME EVIDENCE</span>
+      <span id="footer-mode">Loading evidence mode</span>
+    </footer>
+    <script type="module" src="/celld-report.js"></script>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "protein-cloudflare-agents-probe",
+  "main": "dist/worker.js",
+  "compatibility_date": "2026-08-09",
+  "durable_objects": {
+    "bindings": [
+      { "name": "PROBE", "class_name": "ProbeAgent" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["ProbeAgent"] }
+  ]
+}

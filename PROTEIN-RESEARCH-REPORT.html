@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Research report and architecture decision for Protein, a minimal celld-native durable agent runtime.">
+  <title>Protein: the Agent Cell thesis</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: oklch(1 0 0);
+      --surface: oklch(0.965 0.008 252);
+      --surface-strong: oklch(0.925 0.025 252);
+      --ink: oklch(0.18 0.025 252);
+      --muted: oklch(0.43 0.028 252);
+      --primary: oklch(0.478 0.136 251.8);
+      --primary-dark: oklch(0.31 0.105 252);
+      --primary-pale: oklch(0.92 0.04 252);
+      --signal: oklch(0.70 0.17 52);
+      --signal-pale: oklch(0.94 0.045 52);
+      --positive: oklch(0.54 0.12 153);
+      --positive-pale: oklch(0.94 0.035 153);
+      --rule: oklch(0.87 0.015 252);
+      --white: oklch(1 0 0);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --ease: cubic-bezier(.16, 1, .3, 1);
+      --rail: 15rem;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 17px;
+      line-height: 1.65;
+      text-rendering: optimizeLegibility;
+    }
+    a { color: var(--primary-dark); text-underline-offset: .18em; }
+    a:hover { color: var(--primary); }
+    :focus-visible { outline: 3px solid var(--signal); outline-offset: 4px; }
+    .skip-link {
+      position: fixed; left: 1rem; top: 1rem; z-index: 20;
+      transform: translateY(-160%); padding: .65rem 1rem;
+      background: var(--ink); color: var(--white); border-radius: 6px;
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .hero {
+      min-height: 94svh;
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(18rem, .65fr);
+      background: var(--primary);
+      color: var(--white);
+      overflow: hidden;
+    }
+    .hero-copy {
+      padding: clamp(2rem, 7vw, 7rem);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 94svh;
+    }
+    .hero-meta, .stamp, .mono { font-family: var(--mono); }
+    .hero-meta { font-size: .78rem; line-height: 1.5; max-width: 50ch; }
+    h1 {
+      margin: 2rem 0;
+      max-width: 10ch;
+      font-size: clamp(3.5rem, 8vw, 6rem);
+      line-height: .95;
+      letter-spacing: -.035em;
+      text-wrap: balance;
+    }
+    .hero-lede {
+      max-width: 54ch;
+      font-size: clamp(1.15rem, 2vw, 1.45rem);
+      line-height: 1.45;
+      text-wrap: pretty;
+    }
+    .hero-plate {
+      padding: clamp(1.5rem, 4vw, 4rem);
+      display: flex;
+      align-items: center;
+      background: var(--primary-dark);
+      position: relative;
+    }
+    .hero-plate::before {
+      content: "";
+      position: absolute; inset: 7%;
+      border: 1px solid color-mix(in oklch, var(--white), transparent 70%);
+      border-radius: 14px;
+    }
+    .hero-plate svg { width: 100%; height: auto; position: relative; }
+
+    .layout { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); }
+    nav {
+      position: sticky; top: 0; height: 100svh;
+      padding: 2rem 1.5rem;
+      border-right: 1px solid var(--rule);
+      background: var(--bg);
+      overflow-y: auto;
+    }
+    nav strong { display: block; margin-bottom: 1.25rem; font-size: .9rem; }
+    nav ol { margin: 0; padding: 0; list-style: none; }
+    nav li + li { margin-top: .35rem; }
+    nav a {
+      display: block; padding: .25rem 0;
+      color: var(--muted); text-decoration: none; font-size: .82rem;
+    }
+    nav a:hover { color: var(--primary-dark); }
+    nav .legend { margin-top: 2rem; padding-top: 1.2rem; border-top: 1px solid var(--rule); }
+
+    main { min-width: 0; }
+    section { padding: clamp(4rem, 8vw, 8rem) clamp(1.5rem, 8vw, 8rem); }
+    section:nth-child(even) { background: var(--surface); }
+    .measure { max-width: 76rem; margin: 0 auto; }
+    .section-head {
+      display: grid; grid-template-columns: minmax(12rem, .45fr) minmax(0, 1fr);
+      gap: clamp(2rem, 7vw, 7rem); align-items: start; margin-bottom: 3.5rem;
+    }
+    .section-title { margin: 0; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.04; letter-spacing: -.03em; text-wrap: balance; }
+    .section-intro { margin: 0; max-width: 66ch; font-size: 1.08rem; color: var(--muted); text-wrap: pretty; }
+    h2, h3 { text-wrap: balance; }
+    h3 { margin: 0 0 .65rem; font-size: 1.12rem; line-height: 1.3; }
+    p { max-width: 72ch; text-wrap: pretty; }
+    .label {
+      display: inline-flex; align-items: center; gap: .42rem;
+      padding: .22rem .55rem; border-radius: 999px;
+      font: 700 .68rem/1.2 var(--mono); letter-spacing: .01em;
+      background: var(--surface-strong); color: var(--primary-dark);
+    }
+    .label::before { content: ""; width: .48rem; height: .48rem; border-radius: 50%; background: currentColor; }
+    .label.observed { background: var(--positive-pale); color: oklch(0.36 0.11 153); }
+    .label.risk { background: var(--signal-pale); color: oklch(0.39 0.14 45); }
+    .label.proposal { background: var(--primary-pale); color: var(--primary-dark); }
+    .label.inference { background: oklch(0.93 0.04 300); color: oklch(0.38 0.11 300); }
+    .stamp { font-size: .72rem; letter-spacing: .02em; color: var(--muted); }
+
+    .thesis {
+      margin: 0; padding: clamp(1.5rem, 4vw, 3.5rem);
+      background: var(--ink); color: var(--white); border-radius: 12px;
+      font-size: clamp(1.45rem, 3vw, 2.45rem); line-height: 1.25; letter-spacing: -.02em;
+      max-width: none;
+    }
+    .evidence-row { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+    .evidence-row article { padding: 1.5rem; min-width: 0; }
+    .evidence-row article + article { border-left: 1px solid var(--rule); }
+    .evidence-row strong { display: block; margin: .6rem 0 .15rem; font: 700 clamp(1.5rem, 3vw, 2.6rem)/1 var(--mono); letter-spacing: -.04em; }
+    .evidence-row p { margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.45; }
+
+    .diagram {
+      margin: 2.5rem 0; padding: clamp(1rem, 3vw, 2.5rem);
+      border: 1px solid var(--rule); border-radius: 14px; background: var(--bg);
+    }
+    .diagram svg { width: 100%; height: auto; display: block; }
+    .diagram figcaption { margin-top: 1rem; max-width: 75ch; color: var(--muted); font-size: .86rem; }
+    .diagram text { font-family: var(--sans); fill: var(--ink); }
+    .diagram .svg-mono { font-family: var(--mono); }
+
+    .split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(2rem, 6vw, 6rem); }
+    .plain-list { margin: 1rem 0 0; padding: 0; list-style: none; }
+    .plain-list li { padding: .8rem 0; border-top: 1px solid var(--rule); }
+    .plain-list li:last-child { border-bottom: 1px solid var(--rule); }
+    .plain-list strong { display: block; }
+    .plain-list span { color: var(--muted); font-size: .9rem; }
+
+    .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: .65rem; margin: 2rem 0; }
+    .flow div { min-height: 8rem; padding: 1rem; border-top: 4px solid var(--primary); background: var(--bg); }
+    .flow div:nth-child(4) { border-color: var(--signal); }
+    .flow b { display: block; font: 700 .75rem/1.2 var(--mono); color: var(--primary-dark); }
+    .flow p { margin: .6rem 0 0; font-size: .84rem; line-height: 1.45; color: var(--muted); }
+
+    .comparison { display: grid; gap: 1.25rem; }
+    .bar-row { display: grid; grid-template-columns: 11rem minmax(0, 1fr) 8rem; gap: 1rem; align-items: center; }
+    .track { height: 1.2rem; background: var(--surface-strong); overflow: hidden; border-radius: 999px; }
+    .bar { height: 100%; background: var(--primary); transform-origin: left; animation: grow 900ms var(--ease) both; }
+    .bar.signal { background: var(--signal); }
+    .bar-row output { font: 700 .83rem/1 var(--mono); text-align: right; }
+    @keyframes grow { from { transform: scaleX(.05); } to { transform: scaleX(1); } }
+
+    .table-wrap { overflow-x: auto; margin: 2rem 0; }
+    table { width: 100%; min-width: 44rem; border-collapse: collapse; font-size: .9rem; }
+    th, td { padding: .85rem 1rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); }
+    th { font-size: .72rem; font-family: var(--mono); color: var(--muted); }
+    td:first-child { font-weight: 700; }
+
+    .use-cases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+    .use-cases article { padding: clamp(1.3rem, 3vw, 2.2rem); background: var(--bg); }
+    .use-cases article:first-child { grid-column: 1 / -1; background: var(--primary-dark); color: var(--white); }
+    .use-cases article:first-child p { color: color-mix(in oklch, var(--white), transparent 18%); }
+    .use-cases p { margin: .45rem 0 0; color: var(--muted); font-size: .92rem; }
+    .rank { font: 700 .78rem/1 var(--mono); opacity: .78; }
+
+    .gate { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; }
+    .gate > div { padding: clamp(1.5rem, 4vw, 3rem); }
+    .gate > div + div { background: var(--ink); color: var(--white); }
+    .gate ul { padding-left: 1.2rem; }
+    .gate li + li { margin-top: .65rem; }
+
+    .timeline { position: relative; margin-top: 2rem; }
+    .timeline::before { content: ""; position: absolute; left: .42rem; top: .5rem; bottom: .5rem; width: 1px; background: var(--rule); }
+    .timeline article { position: relative; padding: 0 0 2rem 2rem; }
+    .timeline article::before { content: ""; position: absolute; left: 0; top: .38rem; width: .85rem; height: .85rem; border-radius: 50%; background: var(--primary); }
+    .timeline article.risk-point::before { background: var(--signal); }
+    .timeline p { margin: .3rem 0 0; color: var(--muted); }
+
+    .sources { counter-reset: source; padding: 0; list-style: none; }
+    .sources li { counter-increment: source; display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); padding: 1rem 0; border-top: 1px solid var(--rule); }
+    .sources li::before { content: counter(source, decimal-leading-zero); font: 700 .75rem/1.6 var(--mono); color: var(--primary); }
+    .sources small { display: block; color: var(--muted); margin-top: .2rem; }
+
+    .footer { padding: 3rem clamp(1.5rem, 8vw, 8rem); background: var(--primary-dark); color: var(--white); }
+    .footer-inner { max-width: 76rem; margin: auto; display: flex; justify-content: space-between; gap: 2rem; align-items: end; }
+    .footer p { margin: 0; }
+
+    @media (max-width: 960px) {
+      .hero { grid-template-columns: 1fr; }
+      .hero-copy { min-height: 74svh; }
+      .hero-plate { min-height: 26rem; }
+      .layout { display: block; }
+      nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--rule); columns: 2; }
+      nav strong, nav .legend { column-span: all; }
+      .evidence-row { grid-template-columns: repeat(2, 1fr); }
+      .evidence-row article:nth-child(3) { border-left: 0; border-top: 1px solid var(--rule); }
+      .evidence-row article:nth-child(4) { border-top: 1px solid var(--rule); }
+      .flow { grid-template-columns: 1fr 1fr; }
+      .flow div:last-child { grid-column: 1 / -1; }
+    }
+    @media (max-width: 680px) {
+      body { font-size: 16px; }
+      h1 { font-size: clamp(3rem, 16vw, 4.6rem); }
+      .hero-copy { padding: 1.5rem; }
+      .hero-plate { padding: 1.5rem; min-height: 20rem; }
+      nav { columns: 1; }
+      .section-head, .split, .gate { grid-template-columns: 1fr; }
+      .evidence-row { grid-template-columns: 1fr; }
+      .evidence-row article + article { border-left: 0; border-top: 1px solid var(--rule); }
+      .flow, .use-cases { grid-template-columns: 1fr; }
+      .use-cases article:first-child { grid-column: auto; }
+      .bar-row { grid-template-columns: 1fr auto; }
+      .track { grid-row: 2; grid-column: 1 / -1; }
+      .footer-inner { display: block; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+    @media print {
+      nav { display: none; }
+      .layout { display: block; }
+      .hero { min-height: auto; print-color-adjust: exact; }
+      .hero-copy { min-height: auto; }
+      section { break-inside: avoid; padding: 2rem 0; }
+      a { color: inherit; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#report">Skip to report</a>
+
+  <header class="hero">
+    <div class="hero-copy">
+      <div class="hero-meta">ARCHITECTURE DECISION REPORT · 09 AUG 2026<br>PROTEIN / CELLD 0.1.0 / AGENTS 0.20.1</div>
+      <div>
+        <h1>The Agent Cell thesis</h1>
+        <p class="hero-lede">What should an agent become when identity, SQLite, alarms, WebSockets, and placement are already durable?</p>
+      </div>
+      <p class="hero-meta">RESEARCH → COMPATIBILITY PROBE → FAILED ASSUMPTION → MINIMAL RUNTIME → CRASH TEST → FLEET TEST</p>
+    </div>
+    <div class="hero-plate" aria-label="Diagram of one durable cell connected to external execution">
+      <svg viewBox="0 0 520 620" role="img" aria-labelledby="hero-title hero-desc">
+        <title id="hero-title">The Agent Cell boundary</title>
+        <desc id="hero-desc">Events enter a named durable cell. The cell stores state and action intent, while model and executor services remain outside.</desc>
+        <defs>
+          <marker id="arrow-white" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="oklch(1 0 0)"/></marker>
+        </defs>
+        <g fill="none" stroke="oklch(1 0 0)" stroke-width="2">
+          <rect x="95" y="145" width="330" height="315" rx="18"/>
+          <rect x="130" y="190" width="260" height="72" rx="8" opacity=".9"/>
+          <rect x="130" y="282" width="120" height="132" rx="8" opacity=".65"/>
+          <rect x="270" y="282" width="120" height="132" rx="8" opacity=".65"/>
+          <path d="M260 65V135" marker-end="url(#arrow-white)"/>
+          <path d="M180 470V555" marker-end="url(#arrow-white)"/>
+          <path d="M340 470V555" marker-end="url(#arrow-white)"/>
+        </g>
+        <g fill="oklch(1 0 0)" text-anchor="middle">
+          <text x="260" y="43" font-size="18" font-weight="700">events · chat · alarms</text>
+          <text x="260" y="177" font-size="15" font-family="ui-monospace, monospace">AGENT / NAME</text>
+          <text x="260" y="221" font-size="26" font-weight="750">durable identity</text>
+          <text x="260" y="246" font-size="15" opacity=".78">one owner · compact state</text>
+          <text x="190" y="330" font-size="17" font-weight="700">inbox</text>
+          <text x="190" y="354" font-size="14" opacity=".75">events</text>
+          <text x="190" y="376" font-size="14" opacity=".75">runs</text>
+          <text x="330" y="330" font-size="17" font-weight="700">outbox</text>
+          <text x="330" y="354" font-size="14" opacity=".75">intent</text>
+          <text x="330" y="376" font-size="14" opacity=".75">receipts</text>
+          <text x="180" y="590" font-size="16" font-weight="700">model API</text>
+          <text x="340" y="590" font-size="16" font-weight="700">executor API</text>
+        </g>
+      </svg>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav aria-label="Report contents">
+      <strong>Report map</strong>
+      <ol>
+        <li><a href="#decision">The decision</a></li>
+        <li><a href="#method">Research method</a></li>
+        <li><a href="#substrate">What celld changes</a></li>
+        <li><a href="#primitive">The native primitive</a></li>
+        <li><a href="#runtime">How it works</a></li>
+        <li><a href="#failure">Failure semantics</a></li>
+        <li><a href="#compatibility">Compatibility findings</a></li>
+        <li><a href="#evidence">Measured evidence</a></li>
+        <li><a href="#demand">Demand and use cases</a></li>
+        <li><a href="#boundary">What Protein is not</a></li>
+        <li><a href="#roadmap">Roadmap and gates</a></li>
+        <li><a href="#sources">Sources</a></li>
+      </ol>
+      <div class="legend">
+        <strong>Claim key</strong>
+        <p><span class="label observed">Observed</span></p>
+        <p><span class="label inference">Inference</span></p>
+        <p><span class="label proposal">Proposal</span></p>
+        <p><span class="label risk">Open risk</span></p>
+      </div>
+    </nav>
+
+    <main id="report">
+      <section id="decision">
+        <div class="measure">
+          <div class="section-head">
+            <h2 class="section-title">The decision</h2>
+            <p class="section-intro">Protein should not be “Claude Code running forever inside celld.” Celld has no shell, workspace, or durable JavaScript continuation. The native shape is a durable actor that controls work performed elsewhere.</p>
+          </div>
+          <p class="thesis"><span class="label proposal">Proposal</span><br><br>A named cell receives events, reconciles them against private state, commits action intent before external execution, records the outcome, and hibernates when no work is runnable.</p>
+          <div class="evidence-row" aria-label="Summary evidence">
+            <article><span class="label observed">Observed</span><strong>1,000 / 1,000</strong><p>distinct Protein cells activated in the final clean-room run.</p></article>
+            <article><span class="label observed">Observed</span><strong>19.457 s</strong><p>elapsed at concurrency 32 on the development host.</p></article>
+            <article><span class="label observed">Observed</span><strong>10 / 13</strong><p>hard-crash action cases passed; three unsafe marker/dispatch cases failed.</p></article>
+            <article><span class="label risk">Falsified</span><strong>2 owners</strong><p>A and B both served and dispatched for one cell in the tested stale-owner/skew window.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="method">
+        <div class="measure">
+          <div class="section-head">
+            <h2 class="section-title">Research method</h2>
+            <p class="section-intro">The inquiry moved from broad possibility to falsifiable architecture. Documentation defined the expected substrate; executable probes tested compatibility; crash and fleet tests decided which implementation survived contact with celld.</p>
+          </div>
+          <div class="timeline">
+            <article><span class="stamp">01 · IDEATION</span><h3>Generate widely, then distrust the list</h3><p>One hundred use cases were researched and organized. This showed representational breadth, but not deployment demand. “Could run here” was separated from “would cause someone to deploy celld.”</p></article>
+            <article><span class="stamp">02 · SUBSTRATE READING</span><h3>Derive the primitive from celld</h3><p>Named objects, private SQLite, alarms, hibernatable sockets, and bucket-backed placement point toward identity-centered actors. Missing shell, filesystem, workflow, and blob primitives force a control-plane/data-plane split.</p></article>
+            <article><span class="stamp">03 · COMPATIBILITY PROBE</span><h3>Run Cloudflare Agents instead of guessing</h3><p>A pinned probe exercised state, schedules, WebSockets, restart recovery, and queued outbound work on celld 0.1.0.</p></article>
+            <article class="risk-point"><span class="stamp">04 · DISCONFIRMATION</span><h3>Reject the convenient base class</h3><p>The full SDK needed a packaging workaround, detached queue work was abandoned, and the 1,000-cell attempt reached approximately 9.9 GB RSS before timeouts. Extending the full Agent class no longer fit the fleet premise.</p></article>
+            <article><span class="stamp">05 · MINIMAL IMPLEMENTATION</span><h3>Build only the missing durable semantics</h3><p>Protein was reduced to a direct DurableObject subclass with a transactional inbox, runs, action outbox, receipts, journal, one-alarm reconciler, and sockets.</p></article>
+            <article><span class="stamp">06 · RECOVERY + FLEET</span><h3>Test the boundary, not a toy counter</h3><p>A RepoAgent dispatched to an external idempotent executor, survived interruption during an in-flight action, recovered on a fresh local celld cache, and completed a 1,000-cell activation run.</p></article>
+            <article class="risk-point"><span class="stamp">07 · SAFETY FALSIFICATION</span><h3>Crash every boundary and split the owner</h3><p>A 13-case SIGKILL matrix proved idempotent and reconcilable convergence but falsified unsafe marker and redelivery protection. A two-node partition/skew test then produced simultaneous A/B dispatch; the external idempotency ledger contained it to one logical job.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="substrate">
+        <div class="measure">
+          <div class="section-head">
+            <h2 class="section-title">What celld changes</h2>
+            <p class="section-intro">Celld already solves identity, ownership, local transactional state, activation, and restoration. An agent framework on top should exploit those choices rather than recreating a portable abstraction that hides them.</p>
+          </div>
+          <div class="split">
+            <div>
+              <h3>Native affordances</h3>
+              <ul class="plain-list">
+                <li><strong>Name-addressed objects</strong><span>A stable identity can be routed without querying a shared registry.</span></li>
+                <li><strong>Private SQLite</strong><span>State, event admission, action intent, and receipts can share one transaction boundary.</span></li>
+                <li><strong>One intended active owner</strong><span>Per-identity coordination is local in the normal case, but the new chaos harness falsified exclusivity in a stale-owner/skew window on celld 0.1.0.</span></li>
+                <li><strong>HTTP, RPC, sockets, alarms</strong><span>Multiple wake sources target the same durable identity, while idle instances leave memory.</span></li>
+                <li><strong>Operator-owned bucket</strong><span>Deployments, cell databases, and ownership records live in S3-compatible storage.</span></li>
+              </ul>
+            </div>
+            <div>
+              <h3>Absent by design or today</h3>
+              <ul class="plain-list">
+                <li><strong>No agent filesystem</strong><span>Repository checkout and artifacts require an executor or object store.</span></li>
+                <li><strong>No subprocess sandbox</strong><span>Generated code and shell tools do not belong inside the cell.</span></li>
+                <li><strong>No durable promise</strong><span>Open fetches, timers, and closures cannot be treated as recovery state.</span></li>
+                <li><strong>No global SQL</strong><span>Fleet discovery, quotas, and cross-agent analytics need a control plane.</span></li>
+                <li><strong>No current workflow service</strong><span>Large, finite step graphs should integrate with one rather than inflate Protein.</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="primitive">
+        <div class="measure">
+          <div class="section-head">
+            <h2 class="section-title">The native primitive</h2>
+            <p class="section-intro">An Agent Cell is an open-ended identity, not a goal and not a process. Runs, turns, and actions are records governed by that identity.</p>
+          </div>
+          <figure class="diagram">
+            <svg viewBox="0 0 1080 570" role="img" aria-labelledby="map-title map-desc">
+              <title id="map-title">Agent Cell responsibility map</title>
+              <desc id="map-desc">Events enter a cell. SQLite holds state, inbox, runs, outbox, receipts, and journal. The cell calls external model and executor services and receives results back as events.</desc>
+              <defs>
+                <marker id="a-blue" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="oklch(0.478 0.136 251.8)"/></marker>
+                <marker id="a-orange" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="oklch(0.70 0.17 52)"/></marker>
+              </defs>
+              <rect x="265" y="55" width="550" height="455" rx="18" fill="oklch(0.965 0.008 252)" stroke="oklch(0.478 0.136 251.8)" stroke-width="3"/>
+              <text x="300" y="100" font-size="18" class="svg-mono" fill="oklch(0.31 0.105 252)">ProteinAgent(name)</text>
+              <text x="300" y="139" font-size="30" font-weight="750">durable control plane</text>
+              <g fill="oklch(1 0 0)" stroke="oklch(0.87 0.015 252)">
+                <rect x="310" y="183" width="210" height="105" rx="10"/><rect x="560" y="183" width="210" height="105" rx="10"/>
+                <rect x="310" y="325" width="210" height="105" rx="10"/><rect x="560" y="325" width="210" height="105" rx="10"/>
+              </g>
+              <g font-size="18" font-weight="700"><text x="340" y="225">state + runs</text><text x="590" y="225">event inbox</text><text x="340" y="367">action outbox</text><text x="590" y="367">receipts + journal</text></g>
+              <g font-size="14" fill="oklch(0.43 0.028 252)"><text x="340" y="253">compact JSON · lifecycle</text><text x="590" y="253">dedupe · leases · revisions</text><text x="340" y="395">intent before dispatch</text><text x="590" y="395">result · error · ambiguity</text></g>
+              <g fill="none" stroke="oklch(0.478 0.136 251.8)" stroke-width="3" marker-end="url(#a-blue)"><path d="M75 185H245"/><path d="M75 285H245"/><path d="M75 385H245"/></g>
+              <g font-size="17" font-weight="650"><text x="28" y="178">chat / RPC</text><text x="28" y="278">webhooks</text><text x="28" y="378">alarm</text></g>
+              <g fill="none" stroke="oklch(0.70 0.17 52)" stroke-width="3" marker-end="url(#a-orange)"><path d="M835 205H995"/><path d="M835 385H995"/></g>
+              <g font-size="17" font-weight="650"><text x="875" y="180">model API</text><text x="865" y="360">executor</text></g>
+              <g fill="none" stroke="oklch(0.43 0.028 252)" stroke-width="2" stroke-dasharray="7 7" marker-end="url(#a-blue)"><path d="M995 235H835"/><path d="M995 415H835"/></g>
+              <text x="845" y="485" font-size="14" class="svg-mono" fill="oklch(0.43 0.028 252)">external capability boundary</text>
+            </svg>
+            <figcaption>The cell owns coordination and durable truth. External systems own compute environments and large data. Their only shared correctness handle is a durable action ID plus an explicit receipt or reconciliation result.</figcaption>
+          </figure>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>UNIT</th><th>LIFETIME</th><th>ROLE</th><th>PROTEIN STATUS</th></tr></thead>
+              <tbody>
+                <tr><td>Agent</td><td>Months or years</td><td>Named memory and authority boundary</td><td>Implemented</td></tr>
+                <tr><td>Run</td><td>One goal</td><td>Status, result, and error within the agent</td><td>Implemented</td></tr>
+                <tr><td>Turn / event</td><td>One bounded activation</td><td>Reconcile input against current state</td><td>Implemented as durable events</td></tr>
+                <tr><td>Action</td><td>Until receipt or ambiguity</td><td>External capability request</td><td>Implemented with safety classes</td></tr>
+                <tr><td>Workflow</td><td>Finite step graph</td><td>Durable continuation and orchestration</td><td>Deliberately external</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="runtime">
+        <div class="measure">
+          <div class="section-head">
+            <h2 class="section-title">How it works</h2>
+            <p class="section-intro">Protein adds the durable semantics celld does not supply as a single runtime contract. The important operation is not the model call; it is the transition around it.</p>
+          </div>
+          <div class="flow" aria-label="Five-stage event and action lifecycle">
+            <div><b>1 · ADMIT</b><p>Canonicalize an event ID and payload. Equivalent repeats are accepted as duplicates; changed content conflicts.</p></div>
+            <div><b>2 · CLAIM</b><p>Increment attempts and revision. Record a lease in a short SQLite transaction.</p></div>
+            <div><b>3 · DECIDE</b><p>Run application or model logic outside the transaction against the claimed state.</p></div>
+            <div><b>4 · COMMIT INTENT</b><p>Fence on revision, then atomically persist state, run status, action intents, completion, and journal.</p></div>
+            <div><b>5 · EXECUTE + RETURN</b><p>Dispatch later with the action ID, persist the terminal receipt and outcome event together, then reconcile again.</p></div>
+          </div>
+          <div class="split">
+            <div>
+              <h3>One physical alarm, many logical deadlines</h3>
+              <p>Pending events and actions contribute <span class="mono">available_at</span>. Claimed work contributes <span class="mono">lease_until</span>. Protein arms celld’s one alarm for the earliest timestamp, processes at most one runnable item, and re-arms if work remains.</p>
+            </div>
+            <div>
+              <h3>Revision fences, not in-memory locks</h3>
+              <p>Handlers may interleave while awaiting a model or tool. A decision commits only if the row still carries the claimed revision. Recovery reconstructs work from SQLite rather than resuming a promise.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="failure">
+        <div class="measure">
+          <div class="section-head">
+            <h2 class="section-title">The exactly-once boundary</h2>
+            <p class="section-intro">SQLite and a remote API cannot share one atomic commit. Protein makes this explicit rather than hiding it behind a queue-shaped method.</p>
+          </div>
+          <figure class="diagram">
+            <svg viewBox="0 0 1080 520" role="img" aria-labelledby="crash-title crash-desc">
+              <title id="crash-title">Crash envelope for external actions</title>
+              <desc id="crash-desc">The cell commits action intent, dispatches using an idempotency key, the executor accepts, and the cell commits a receipt. Crashes before or after remote acceptance can require retry or produce ambiguity.</desc>
+              <g stroke="oklch(0.87 0.015 252)" stroke-width="2"><line x1="170" y1="85" x2="170" y2="460"/><line x1="540" y1="85" x2="540" y2="460"/><line x1="910" y1="85" x2="910" y2="460"/></g>
+              <g font-size="18" font-weight="750" text-anchor="middle"><text x="170" y="55">Agent Cell</text><text x="540" y="55">network boundary</text><text x="910" y="55">executor</text></g>
+              <g fill="none" stroke="oklch(0.478 0.136 251.8)" stroke-width="3"><path d="M170 130H530"/><path d="M550 205H900"/><path d="M900 290H550"/><path d="M530 375H170"/></g>
+              <g font-size="15"><text x="205" y="120">commit intent + action ID</text><text x="595" y="195">POST /jobs · Idempotency-Key</text><text x="625" y="280">compact receipt</text><text x="215" y="365">commit receipt + outcome event</text></g>
+              <g fill="oklch(0.70 0.17 52)"><circle cx="355" cy="130" r="9"/><circle cx="725" cy="205" r="9"/><circle cx="725" cy="290" r="9"/><circle cx="355" cy="375" r="9"/></g>
+              <g font-size="13" class="svg-mono" fill="oklch(0.39 0.14 45)"><text x="270" y="157">crash: safe retry</text><text x="650" y="232">crash: unknown delivery</text><text x="636" y="317">crash: remote accepted</text><text x="270" y="402">crash: local convergence</text></g>
+              <rect x="250" y="430" width="580" height="52" rx="8" fill="oklch(0.94 0.045 52)"/>
+              <text x="540" y="462" text-anchor="middle" font-size="16" font-weight="700">Lease expiry is a retry signal. It is not cancellation.</text>
+            </svg>
+            <figcaption>The final test killed celld after the mock executor began a 1.5-second request. After restart and lease recovery, Protein redelivered under the same durable key; the executor observed multiple requests but created one logical job.</figcaption>
+          </figure>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>SAFETY CLASS</th><th>REQUIRED RECEIVER BEHAVIOR</th><th>UNCERTAIN DISPATCH</th></tr></thead>
+              <tbody>
+                <tr><td>idempotent</td><td>Collapse repeated action IDs to one logical operation.</td><td>Retry under the same key.</td></tr>
+                <tr><td>reconcilable</td><td>Expose authoritative lookup by action key or external reference.</td><td>Query before deciding whether to retry.</td></tr>
+                <tr><td>unsafe</td><td>No reliable idempotency or reconciliation exists.</td><td>Persist <span class="mono">ambiguous</span>; require human resolution.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="compatibility">
+        <div class="measure">
+          <div class="section-head">
+            <h2 class="section-title">Cloudflare Agents compatibility</h2>
+            <p class="section-intro">The SDK is strong prior art and partially executable on celld, but the tested package is neither a drop-in dependency nor the right production base for Protein’s minimal fleet premise.</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>SURFACE</th><th>RESULT</th><th>WHAT THE PROBE SHOWED</th></tr></thead>
+              <tbody>
+                <tr><td>Agent construction</td><td><span class="label observed">Pass*</span></td><td>Activated as a SQLite Durable Object after prebundling.</td></tr>
+                <tr><td>Persistent state</td><td><span class="label observed">Pass</span></td><td>State survived node stop, fresh local cache, and bucket restore.</td></tr>
+                <tr><td>Durable schedule</td><td><span class="label observed">Pass</span></td><td>Scheduled callback ran through the cell alarm and persisted its result.</td></tr>
+                <tr><td>Hibernatable WebSocket</td><td><span class="label observed">Pass</span></td><td>Connect, identity/state, custom frames, and echo were observed.</td></tr>
+                <tr><td>Queued awaited fetch</td><td><span class="label risk">Fail</span></td><td>The tested <span class="mono">queue()</span> path launched detached flushing; celld ended the handler and abandoned the pending fetch, leaving the item delivering.</td></tr>
+                <tr><td>Sub-agents / facets</td><td><span class="label risk">Unavailable</span></td><td>The current celld surface does not expose the facets dependency.</td></tr>
+                <tr><td>Workflows and platform tools</td><td><span class="label risk">Unavailable</span></td><td>Managed Workflows, Email, Browser, Workers AI, and R2 bindings are outside current celld.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p><span class="label observed">Packaging note</span> Direct deployment selected a Node-oriented <span class="mono">mimetext</span> path importing bare <span class="mono">path</span>. The probe required an explicit neutral esbuild prebundle with Workers conditions and a <span class="mono">path=node:path</span> alias.</p>
+        </div>
+      </section>
+
+      <section id="evidence">
+        <div class="measure">
+          <div class="section-head">
+            <h2 class="section-title">Measured evidence</h2>
+            <p class="section-intro">All figures are prototype measurements on one machine with MinIO over loopback. They decide implementation direction; they do not establish a capacity envelope.</p>
+          </div>
+          <div class="comparison" aria-label="Bundle size comparison">
+            <div class="bar-row"><strong>Agents probe</strong><div class="track"><div class="bar signal" style="width:100%"></div></div><output>~1.7 MB</output></div>
+            <div class="bar-row"><strong>Protein RepoAgent</strong><div class="track"><div class="bar" style="width:2.01%"></div></div><output>34.2 KB</output></div>
+          </div>
+          <p class="stamp">BUNDLE SCALE · APPROXIMATELY 50× SMALLER · RESIDENT MEMORY IS NOT DETERMINED BY BUNDLE BYTES ALONE</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>FINAL CLEAN-ROOM RUN</th><th>RESULT</th><th>CONDITION / LIMIT</th></tr></thead>
+              <tbody>
+                <tr><td>Cloudflare probe recovery</td><td>1.953 s</td><td>Fresh celld process and local cache; two-second test TTL.</td></tr>
+                <tr><td>RepoAgent in-flight recovery</td><td>1.631 s</td><td>Executor delay 1.5 s; action lease 3 s; same idempotency key.</td></tr>
+                <tr><td>Fleet activation</td><td>1,000 / 1,000</td><td>Distinct named cells; concurrency 32.</td></tr>
+                <tr><td>Fleet elapsed</td><td>19.457 s</td><td>Four allocated CPU cores; local object store.</td></tr>
+                <tr><td>Peak celld RSS</td><td>3,459 MiB</td><td>Peak across probe, recovery, RepoAgent, and fleet phases.</td></tr>
+                <tr><td>Unit verification</td><td>6 / 6 passed</td><td>Canonical JSON and error contracts; integration covers lifecycle semantics.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="split">
+            <div>
+              <h3>What passed end to end</h3>
+              <p>Event deduplication, content-conflict rejection, external action dispatch, durable outcome handling, hibernatable WebSockets, restart from the bucket, interrupted-action redelivery, and 1,000 distinct cell activations.</p>
+            </div>
+            <div>
+              <h3>What the failed prototype taught us</h3>
+              <p>The Agents-based RepoAgent bundle was approximately 1.7 MB. Its 1,000-cell attempt was stopped after celld reached about 9.9 GB RSS and requests timed out under pressure. That observation rejected the dependency choice; it did not benchmark Cloudflare’s managed platform.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="demand">
+        <div class="measure">
+          <div class="section-head">
+            <h2 class="section-title">What would drive deployment?</h2>
+            <p class="section-intro">The question is not whether a task can be modeled as an agent. Demand appears when high cardinality, sparse activity, private state, identity-local coordination, and self-hosting occur together.</p>
+          </div>
+          <figure class="diagram">
+            <svg viewBox="0 0 980 560" role="img" aria-labelledby="fit-title fit-desc">
+              <title id="fit-title">Use-case demand map</title>
+              <desc id="fit-desc">A quadrant plots fleet cardinality against activity pattern. Protein fits many sparse named identities, while normal services fit continuously busy work and cron fits a small number of sparse tasks.</desc>
+              <line x1="110" y1="465" x2="910" y2="465" stroke="oklch(0.18 0.025 252)" stroke-width="2"/>
+              <line x1="110" y1="465" x2="110" y2="60" stroke="oklch(0.18 0.025 252)" stroke-width="2"/>
+              <line x1="510" y1="70" x2="510" y2="465" stroke="oklch(0.87 0.015 252)" stroke-dasharray="6 7"/>
+              <line x1="110" y1="260" x2="900" y2="260" stroke="oklch(0.87 0.015 252)" stroke-dasharray="6 7"/>
+              <text x="110" y="505" font-size="14">few identities</text><text x="800" y="505" font-size="14">many identities</text>
+              <text x="32" y="458" font-size="14" transform="rotate(-90 32 458)">continuously active</text><text x="32" y="185" font-size="14" transform="rotate(-90 32 185)">mostly inactive</text>
+              <rect x="545" y="88" width="325" height="135" rx="12" fill="oklch(0.478 0.136 251.8)"/>
+              <text x="575" y="127" fill="oklch(1 0 0)" font-size="23" font-weight="750">Protein territory</text>
+              <text x="575" y="158" fill="oklch(1 0 0)" font-size="15">named · compact · sparse</text><text x="575" y="184" fill="oklch(1 0 0)" font-size="15">coordinated · self-hosted</text>
+              <text x="182" y="150" font-size="19" font-weight="700">cron + database</text><text x="185" y="181" font-size="14" fill="oklch(0.43 0.028 252)">small sparse portfolio</text>
+              <text x="182" y="350" font-size="19" font-weight="700">workflow engine</text><text x="185" y="381" font-size="14" fill="oklch(0.43 0.028 252)">finite multi-step jobs</text>
+              <text x="615" y="350" font-size="19" font-weight="700">normal services</text><text x="618" y="381" font-size="14" fill="oklch(0.43 0.028 252)">hot shared workloads</text>
+            </svg>
+            <figcaption>A use case can sit near a boundary. Protein earns its place only when per-identity isolation and lifecycle code materially disappear; “uses an LLM” is not a selection criterion.</figcaption>
+          </figure>
+          <div class="use-cases">
+            <article><span class="rank">STRONGEST ECONOMIC DRIVER</span><h3>Embedded per-customer agent fleets</h3><p>One durable agent per customer account, workspace, or owned resource. Private preferences, integrations, live sessions, and ongoing runs repeat at fleet scale. The embedding product supplies auth, provisioning, and fleet indexing.</p></article>
+            <article><span class="rank">REFERENCE HARNESS</span><h3>Repository engineering agents</h3><p>One cell remembers repository policy, approvals, runs, CI callbacks, and receipts. External executors own checkouts, commands, tests, and patches.</p></article>
+            <article><span class="rank">OPERATIONS</span><h3>Service and incident agents</h3><p>One identity reconciles alerts, deployments, diagnostics, operator chat, and remediation approval; it can stay live during an incident and hibernate afterward.</p></article>
+            <article><span class="rank">PHYSICAL FLEETS</span><h3>Device and site agents</h3><p>Sparse device, facility, vehicle, or site events map naturally to named local history and scheduled maintenance decisions. Not suitable for hard-real-time control.</p></article>
+            <article><span class="rank">PERSISTENT SOCIAL STATE</span><h3>Rooms, communities, and characters</h3><p>Stable identity, compact history, real-time reconnects, and cheap inactivity are native even when the model layer is replaceable or absent.</p></article>
+            <article><span class="rank">SOVEREIGN DEPLOYMENT</span><h3>Organizational assistants</h3><p>One agent per employee, team, or account on customer-controlled infrastructure. A large fleet can justify celld; one personal assistant usually cannot.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="boundary">
+        <div class="measure">
+          <div class="section-head">
+            <h2 class="section-title">Boundaries that keep the idea honest</h2>
+            <p class="section-intro">A minimal primitive stays useful by refusing adjacent platform responsibilities. Each rejected category already has a better substrate or requires capabilities celld does not provide.</p>
+          </div>
+          <div class="split">
+            <div>
+              <h3>Protein is not</h3>
+              <ul class="plain-list">
+                <li><strong>A Codex clone inside celld</strong><span>No shell, repository workspace, or process sandbox lives in the cell.</span></li>
+                <li><strong>A model SDK</strong><span>Model choice, prompting, context assembly, and streaming policy belong to the application.</span></li>
+                <li><strong>A workflow engine</strong><span>It does not persist arbitrary continuations or orchestrate large step graphs.</span></li>
+                <li><strong>A fleet control plane</strong><span>It does not provision identities, maintain a global index, or enforce tenant-wide quotas.</span></li>
+                <li><strong>An exactly-once effect system</strong><span>Remote execution requires idempotency, reconciliation, or explicit ambiguity.</span></li>
+              </ul>
+            </div>
+            <div>
+              <h3>False demand signals</h3>
+              <ul class="plain-list">
+                <li><strong>One page watcher</strong><span>Cron and a row in Postgres are simpler.</span></li>
+                <li><strong>One-shot research or coding</strong><span>No long-lived keyed identity is needed.</span></li>
+                <li><strong>Continuously hot agents</strong><span>Hibernation and sparse activation provide no advantage.</span></li>
+                <li><strong>Global shared-memory swarms</strong><span>Per-cell isolation fights the workload.</span></li>
+                <li><strong>ETL or report pipelines</strong><span>A workflow/data system provides better lineage and bulk coordination.</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="roadmap">
+        <div class="measure">
+          <div class="section-head">
+            <h2 class="section-title">Roadmap by proof, not feature count</h2>
+            <p class="section-intro">The next work should decide whether Protein deserves to remain a library. Adding more agent conveniences before closing the correctness and demand gaps would only increase sunk cost.</p>
+          </div>
+          <div class="gate">
+            <div>
+              <span class="label proposal">Continue when</span>
+              <ul>
+                <li>Design partners need hundreds or thousands of customer-controlled agent identities.</li>
+                <li>The inbox/outbox and per-identity lifecycle remove meaningful application code.</li>
+                <li>External executors can honor durable action IDs and scoped capabilities.</li>
+                <li>Multi-node fault tests establish a safe ownership envelope.</li>
+                <li>Steady-state fleet cost remains favorable after hibernation and real object storage.</li>
+              </ul>
+            </div>
+            <div>
+              <span class="label risk">Shrink or stop when</span>
+              <ul>
+                <li>Postgres plus ordinary services remain equally simple.</li>
+                <li>Restate, Temporal, Rivet, or managed Durable Objects match deployment needs better.</li>
+                <li>The executor, provisioning, or observability control plane becomes the actual product.</li>
+                <li>Celld’s ownership and isolation model cannot satisfy the intended tenancy.</li>
+                <li>Users want portable workflows rather than celld-native identities.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>PRIORITY</th><th>QUESTION</th><th>REQUIRED EVIDENCE</th></tr></thead>
+              <tbody>
+                <tr><td>P0 · FAIL</td><td>Can ownership transfer avoid overlapping authority under clock skew?</td><td>No in the tested celld 0.1.0 topology; require an upstream fix and this harness passing.</td></tr>
+                <tr><td>P0 · PARTIAL</td><td>Does every external-action crash point converge?</td><td>Idempotent and reconcilable effects pass; unsafe effects require rejection or an external broker.</td></tr>
+                <tr><td>P0</td><td>How are auth, secrets, and tenant boundaries enforced?</td><td>Authenticated ingress, name authorization, scoped executor credentials, and retention controls.</td></tr>
+                <tr><td>P1</td><td>How do cancellation, steering, and approvals advance revisions?</td><td>A durable protocol with precedence, expiry, and immutable approval evidence.</td></tr>
+                <tr><td>P1</td><td>What is the actual fleet economics?</td><td>Forced hibernation, 10,000 sparse cells, real S3/R2, nonempty state, alarms, and sockets.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="sources">
+        <div class="measure">
+          <div class="section-head">
+            <h2 class="section-title">Evidence and sources</h2>
+            <p class="section-intro">Primary documentation establishes intended behavior. Repository probes and measurements establish what occurred in the tested versions. Conclusions that combine them are explicitly labeled as inference or proposal.</p>
+          </div>
+          <ol class="sources">
+            <li><div><a href="https://github.com/denoland/celld">denoland/celld repository and README</a><small>Named SQLite cells, S3-compatible durable source of truth, ownership, hibernation, fleet operation, and current limitations.</small></div></li>
+            <li><div><a href="https://github.com/denoland/celld/issues/132">celld issue #132: lease takeover under clock skew</a><small>Open multi-node correctness risk cited as a production blocker.</small></div></li>
+            <li><div><a href="https://developers.cloudflare.com/agents/runtime/lifecycle/agent-class/">Cloudflare Agent class internals</a><small>DurableObject inheritance, SQLite state, WebSockets, queues, schedules, and runtime layers.</small></div></li>
+            <li><div><a href="https://developers.cloudflare.com/agents/concepts/agentic-patterns/long-running-agents/">Cloudflare long-running agents</a><small>Durable identities versus in-memory variables, timers, open fetches, and local closures.</small></div></li>
+            <li><div><a href="https://developers.cloudflare.com/agents/runtime/execution/schedule-tasks/">Cloudflare scheduled tasks</a><small>SQL-backed scheduling and one-alarm multiplexing as prior art.</small></div></li>
+            <li><div><a href="https://github.com/cloudflare/agents">cloudflare/agents source repository</a><small>SDK scope and implementation examined by the pinned compatibility probe.</small></div></li>
+            <li><div><a href="https://docs.restate.dev/ai">Restate durable-agent documentation</a><small>Competitive boundary: durable execution, sessions, flow control, approvals, and inspection.</small></div></li>
+            <li><div><a href="https://docs.temporal.io/ai-cookbook">Temporal AI Cookbook</a><small>Competitive boundary: agent loops, tools, human approval, MCP, and claim-check workflows.</small></div></li>
+            <li><div><span class="mono">probes/cloudflare-agents/</span><small>Executable celld compatibility probe pinned to agents 0.20.1.</small></div></li>
+            <li><div><span class="mono">scripts/celld-e2e.mjs</span><small>Clean-room MinIO, deployment, restart, in-flight action, WebSocket, deduplication, and fleet harness.</small></div></li>
+            <li><div><span class="mono">scripts/action-crash-matrix.mjs + scripts/ownership-chaos.mjs</span><small>Deterministic SIGKILL lifecycle matrix and two-node peer/store partition, wall-clock skew, dual-dispatch, and convergence harnesses. Detailed results: <a href="PROOFS.md">PROOFS.md</a>.</small></div></li>
+            <li><div><span class="mono">src/protein-agent.ts</span><small>Implemented Agent Cell runtime contract: schema, revisions, leases, transitions, action outcomes, alarm reconciliation, and sockets.</small></div></li>
+          </ol>
+          <p class="stamp">RESEARCH SNAPSHOT · 2026-08-09 · PROTOTYPE RESULTS ARE VERSION- AND ENVIRONMENT-SPECIFIC</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <p><strong>Protein</strong><br>A minimal celld-native runtime for durable agent actors.</p>
+      <p class="hero-meta">The smallest useful claim:<br>durable identity + durable intent + explicit uncertainty.</p>
+    </div>
+  </footer>
+</body>
+</html>

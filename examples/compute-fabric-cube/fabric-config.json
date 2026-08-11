@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "protein-compute-fabric-cube/v1",
+  "frozenBeforeModelCalls": true,
+  "model": "gpt-5.6-luna",
+  "topology": {
+    "shape": [3, 3, 3],
+    "layers": ["triage", "execute", "verify"],
+    "domains": ["runtime", "api", "data", "dependencies", "performance", "security", "tests", "docs", "integration"]
+  },
+  "budgets": {
+    "maxModelCalls": 12,
+    "maxOutputTokensPerCall": 1400,
+    "maxSandboxSeconds": 8,
+    "maxSandboxMemoryMb": 128
+  },
+  "reports": [
+    {"id":"r01","domain":"api","title":"Unicode slugs are unstable","taskId":"slugify","fingerprint":"slugify-normalization","kind":"implementation","dependsOn":[]},
+    {"id":"r02","domain":"docs","title":"Empty article titles create blank routes","taskId":"slugify","fingerprint":"slugify-normalization","kind":"duplicate","dependsOn":["r01"]},
+    {"id":"r03","domain":"security","title":"Header casing bypasses override policy","taskId":"merge-headers","fingerprint":"header-canonicalization","kind":"implementation","dependsOn":[]},
+    {"id":"r04","domain":"api","title":"Undefined header override deletes a default","taskId":"merge-headers","fingerprint":"header-canonicalization","kind":"duplicate","dependsOn":["r03"]},
+    {"id":"r05","domain":"data","title":"Duration parser mishandles fractional units","taskId":"parse-duration","fingerprint":"duration-grammar","kind":"implementation","dependsOn":[]},
+    {"id":"r06","domain":"runtime","title":"Whitespace in timeout configuration changes behavior","taskId":"parse-duration","fingerprint":"duration-grammar","kind":"duplicate","dependsOn":["r05"]},
+    {"id":"r07","domain":"performance","title":"Retry backoff starts at the wrong exponent","taskId":"retry-delay","fingerprint":"retry-policy","kind":"implementation","dependsOn":[]},
+    {"id":"r08","domain":"tests","title":"Invalid retry parameters need explicit rejection","taskId":"retry-delay","fingerprint":"retry-policy-validation","kind":"competing-implementation","dependsOn":["r07"]},
+    {"id":"r09","domain":"dependencies","title":"Timeout migration guide depends on the accepted grammar","taskId":"parse-duration","fingerprint":"duration-migration","kind":"dependent","dependsOn":["r05"]},
+    {"id":"r10","domain":"security","title":"Header-smuggling guidance depends on canonical merge semantics","taskId":"merge-headers","fingerprint":"header-security-guidance","kind":"dependent","dependsOn":["r03"]},
+    {"id":"r11","domain":"docs","title":"Route documentation needs the final slug fallback","taskId":"slugify","fingerprint":"slug-docs","kind":"dependent","dependsOn":["r01"]},
+    {"id":"r12","domain":"integration","title":"Release candidate requires all fixes and guidance","taskId":"integration","fingerprint":"release-candidate","kind":"integration","dependsOn":["r01","r03","r05","r07","r09","r10","r11"]}
+  ],
+  "faultSchedule": {
+    "duplicateEventReportId": "r02",
+    "restartWhileSandboxOutstanding": true,
+    "terminateFirstSandboxForTask": "retry-delay",
+    "denyFirstBoundedEvaluationForTask": "parse-duration",
+    "hibernateThenWakeDomain": "docs"
+  },
+  "success": {
+    "durableIdentities": 27,
+    "requiredComputeTiers": ["cell", "model", "bounded", "sandbox"],
+    "requiredAcceptedTasks": 4,
+    "requiredConflictResolutions": 1,
+    "requireRestartRecovery": true,
+    "requireDuplicateSuppression": true,
+    "requireHibernationWake": true,
+    "requireCompleteReceipts": true
+  }
+}

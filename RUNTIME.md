@@ -1,186 +1,258 @@
-# RUNTIME — the Protein contract
+# Protein runtime contract
 
-The base-class surface a Protein agent implements, the DNA schema convention, and the alarm re-arm rule. This is the spec for the first implementation. Every API referenced is verified to exist on celld (see [`CLAUDE.md`](./CLAUDE.md) constraints).
+This document describes the implementation in `src/`, not a future base-class
+proposal.
 
-## Mental model
+## Runtime object
 
-```
-                ┌─────────────────────────── a celld cell (Durable Object) ───────────────────────────┐
-                │                                                                              │
-  HTTP / WS ──► │  fetch() / webSocketMessage()  ──►  express(goal)                                │
-                │        persist intent to DNA            arm alarm  ──►  (cell hibernates)          │
-                │                                                                              │
-   alarm()  ──► │  ensureSchema() → recall() → step() → translate() [fetch LLM] → persist DNA       │
-                │     └─ if continue: setAlarm(now + N)   (re-arm AFTER durable writes)              │
-                │     └─ else:        clear goal, onComplete()                                       │
-                │                                                                              │
-                │   DNA = ctx.storage.sql (private SQLite, LTX-replicated to S3)                     │
-                └────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-## Types
+`ProteinAgent<Env, State>` extends the Workers `DurableObject` class. One named
+Durable Object is one agent identity. Applications provide:
 
 ```ts
-// A unit of work the cell expresses a protein for.
-export type Goal = {
-  id: string;            // stable; used for idempotency
-  kind: string;          // discriminator the subclass switches on
-  input: unknown;        // task-specific payload
-  startedAt: number;     // epoch ms (passed in by the caller; celld has no Date.now in some contexts)
-};
+class MyAgent extends ProteinAgent<Env, MyState> {
+  initialState = { /* compact JSON state */ };
 
-// The result of one bounded step.
-export type StepResult =
-  | { continue: true;  nextWakeMs: number }   // more to do; re-arm the alarm
-  | { continue: false };                       // goal complete; clear it
-
-export interface ChatMsg { role: "system" | "user" | "assistant"; content: string }
-
-export interface TranslateOpts {
-  system?: string;
-  messages: ChatMsg[];
-  model?: string;        // provider-specific; defaults from env
-  maxTokens?: number;
-}
-```
-
-## The base class (sketch)
-
-```ts
-import { DurableObject } from "cloudflare:workers";
-
-export abstract class Protein extends DurableObject<Env> {
-  // ── DNA: declare your cell's durable schema as SQL DDL. Run idempotently each wake. ──
-  protected abstract schema(): readonly string[];
-
-  // ── Express this protein for a goal. Persist intent, arm the first alarm, return. ──
-  // Called from fetch()/webSocketMessage(), or from another cell's RPC. Cell hibernates after.
-  async express(goal: Goal): Promise<void> {
-    await this.ensureSchema();
-    await this.dna().put<Goal>("__goal__", goal);
-    await this.ctx.storage.setAlarm(goal.startedAt);   // fire ASAP
+  protected async onAgentEvent(ctx) {
+    // Return a state/run transition and durable action intents.
   }
 
-  // ── celld's only timer. Runs ONE bounded step, then re-arms or finalizes. ──
-  async alarm(): Promise<void> {
-    await this.ensureSchema();
-    const goal = await this.dna().get<Goal>("__goal__");
-    if (!goal) return;                                  // nothing active
-
-    const result = await this.step(goal);              // subclass: recall → ≤1 translate() → persist
-
-    if (result.continue) {
-      // RE-ARM ONLY AFTER durable writes have returned (see "re-arm rule" below).
-      await this.ctx.storage.setAlarm(Date.now() + result.nextWakeMs);
-    } else {
-      await this.dna().delete("__goal__");
-      await this.onComplete(goal);
-    }
+  protected async executeAction(ctx) {
+    // Invoke an external idempotent or reconcilable capability.
   }
 
-  // ── Implement ONE bounded step. ──
-  // Load prior state from DNA, call this.translate() at most once, write results back.
-  // MUST be safe to re-run (idempotent) for the same goal/step, because a crash can replay it.
-  protected abstract step(goal: Goal): Promise<StepResult>;
-
-  // ── Model access = outbound fetch to ANY provider. There is NO env.AI on celld. ──
-  // Subclass picks Anthropic/OpenAI/local. Keep it one provider-agnostic shape.
-  protected abstract translate(opts: TranslateOpts): Promise<string>;
-
-  // Optional hook when a goal finishes.
-  protected async onComplete(_goal: Goal): Promise<void> {}
-
-  // ── Provided helpers ──
-  protected dna(): ProteinDna { /* thin wrapper over this.ctx.storage + this.ctx.storage.sql */ }
-  protected async ensureSchema(): Promise<void> { /* run schema() with IF NOT EXISTS, once per instance */ }
-}
-```
-
-## DNA schema convention
-
-DNA is the cell's private SQLite, addressed through `this.dna()`:
-
-- **Key/value** for small singletons (active goal, counters, last-run pointer): `dna().put/get/delete`.
-- **Tables** for append-mostly records (messages, events, artifacts-metadata): `this.sql\`...\`` / `dna().sql.exec`.
-- Reserve the `__*` key prefix for Protein internals (`__goal__`, `__schema_v__`).
-
-Conventional tables an agent usually declares:
-
-```sql
-CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT, ts INTEGER);
-CREATE TABLE IF NOT EXISTS events   (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, payload TEXT, ts INTEGER);
-```
-
-> **No blobs in the cell.** celld does not expose R2/blob storage to Worker code (R2 bindings load but every method throws). Keep artifacts as *metadata + a hash* in SQLite; route the bytes to your own object store from outside the cell. Screenshots/PDFs do not belong in DNA.
-
-## The re-arm rule (critical)
-
-A crash between writing step state and re-arming must not lose progress, and a replay must not duplicate side effects. Therefore:
-
-1. Do **all durable writes first** (DNA `put`/`sql.exec`), and let them return.
-2. **Then** call `setAlarm(now + N)` to schedule the next wake.
-3. Make `step()` **idempotent** for a given `(goal.id, step)` so a replay is harmless — e.g., key rows by a monotonic step counter and `INSERT OR IGNORE`.
-
-> Open question (see [`QUESTIONS.md`](./QUESTIONS.md)): a Worker cannot *observe* when celld's LTX replication to S3 actually completes. The conservative rule above relies on celld's replication being prompt; we still need to measure the durability window under failure and decide whether steps need explicit idempotency keys. Until measured, assume any step can be replayed.
-
-## Inbound interaction
-
-- **HTTP one-shot turn:** `fetch()` reads JSON, calls `express()`, returns ack.
-- **Live channel:** upgrade to a hibernatable WebSocket — `WebSocketPair` + `this.ctx.acceptWebSocket(server)`, handle inbound frames in `webSocketMessage(ws, msg)`, push updates via `this.ctx.getWebSockets()`.
-- **Outbound:** `fetch()` and `new WebSocket(url)` (e.g., to a remote browser over CDP) are fully supported.
-
-> Note: `setWebSocketAutoResponse` / `WebSocketRequestResponsePair` are **absent** on celld (tracked gap, issue #123) — the one thing that stops the Cloudflare Agents SDK porting as-is. Protein does not use them; keepalive/protocol ping-pong is the agent's responsibility.
-
-## Minimal example agent
-
-```ts
-import { Protein, type Goal, type StepResult } from "protein";
-
-export class Summarizer extends Protein {
-  protected schema() {
-    return [
-      `CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT, ts INTEGER)`,
-    ];
+  protected async reconcileAction(ctx) {
+    // Return an authoritative prior result, or undefined if none exists.
   }
 
-  protected async step(goal: Goal & { input: { url: string } }): Promise<StepResult> {
-    const page = await (await fetch(goal.input.url)).text();           // outbound fetch
-    const summary = await this.translate({                             // ≤1 LLM call
-      system: "Summarize the page in 5 bullets.",
-      messages: [{ role: "user", content: page.slice(0, 20000) }],
-    });
-    await this.dna().sql.exec(
-      `INSERT INTO messages (role, content, ts) VALUES (?, ?, ?)`,
-      "assistant", summary, goal.startedAt,
-    );
-    return { continue: false };                                        // one-shot
-  }
-
-  protected async translate(opts) {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": this.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: opts.model ?? "claude-sonnet-5",   // use a current concrete id
-        max_tokens: opts.maxTokens ?? 1024,
-        system: opts.system,
-        messages: opts.messages,
-      }),
-    });
-    const data = await res.json();
-    return data.content?.[0]?.text ?? "";
+  async onRequest(request) {
+    // Map application HTTP to startRun(), acceptEvent(), and inspection.
   }
 }
 ```
 
-Worker entry (routes `/a/:id` to the named cell) is identical to the celld pattern in [`CLAUDE.md`](./CLAUDE.md).
+The runtime deliberately does not prescribe a model SDK, prompt format, memory
+algorithm, or tool schema.
 
-## Out of scope for v1
+## Public lifecycle operations
 
-- Multi-cell orchestration (planner/worker) — supported by the model (cells address cells by name) but not abstracted yet.
-- Fleet primitives (concurrency/fairness/rate-limits) — deferred; see [`QUESTIONS.md`](./QUESTIONS.md).
-- A portable backend interface beyond celld — designed for, not yet implemented.
+### `startRun({ id, goal })`
+
+Creates a durable run in `queued` state and accepts the canonical
+`protein.run.requested` event.
+
+- Repeating the same ID and canonically equivalent JSON goal is idempotent.
+- Reusing the ID with different content throws `ProteinConflictError`.
+- A successful response is sent only after both the run and its event/alarm
+  path have been written.
+
+### `acceptEvent({ id, type, runId?, payload })`
+
+Persists a deduplicated event and reconciles the cell alarm.
+
+- Event IDs are unique within an agent cell.
+- Equivalent repeats return `{ duplicate: true }`.
+- A repeated ID with different type, run, or payload conflicts.
+- Object-key ordering does not change event identity; JSON is canonicalized.
+
+### Inspection
+
+- `getRun(id)`
+- `listRuns(limit)`
+- `listActions(limit)`
+- `listJournal(limit)`
+
+These read only the current cell. Celld has no fleet-wide SQL index; global
+discovery belongs in an application control plane.
+
+## Durable schema
+
+The current schema version is `2`. Startup migrates a version-1 action table by
+adding the nullable `dispatch_started_at` column before recording version 2.
+
+| Table | Purpose |
+|---|---|
+| `protein_state` | Current compact application state. |
+| `protein_runs` | Goals, lifecycle status, result, and error. |
+| `protein_events` | Inbox, claim revision, attempts, retry time, and lease. |
+| `protein_actions` | Outbox intents, safety class, attempts, dispatch marker, receipt, and ambiguity. |
+| `protein_journal` | Append-only operational lifecycle records. |
+| `protein_meta` | Runtime schema version. |
+
+Cloudflare Agents internal tables are not used by the production runtime.
+
+## Event processing
+
+One alarm activation processes at most one runnable action or event and then
+reconciles the next alarm.
+
+For an event:
+
+1. A short SQLite transaction selects a pending event or an expired processing
+   lease, increments its attempt and revision, and records `event.claimed`.
+2. `onAgentEvent()` runs outside the transaction. Another request may interleave
+   while it awaits.
+3. A second transaction verifies the claimed revision.
+4. If current, it writes application state, the run transition, action intents,
+   event completion, and journal entries atomically.
+5. If stale, none of the decision is applied.
+6. Failure either schedules application backoff or terminally fails the event
+   and associated run after the configured ceiling.
+
+The runtime does not persist an arbitrary JavaScript continuation. Recovery
+reconstructs work from event/action rows.
+
+## Action processing
+
+An `ActionIntent` contains:
+
+```ts
+interface ActionIntent {
+  id: string;
+  kind: string;
+  payload: JsonValue;
+  safety: "idempotent" | "reconcilable" | "unsafe";
+}
+```
+
+The intent is inserted in the same transaction as the event decision. A later
+alarm activation claims it and increments its revision. A reconcilable action
+first calls `reconcileAction()` with its stable action ID. If no authoritative
+result exists, Protein commits `dispatch_started_at` and then calls
+`executeAction()` with the action ID as `idempotencyKey`.
+
+Action IDs are unique only inside one Agent Cell. The current
+`ActionExecutionContext.idempotencyKey` is therefore a stable cell-local key,
+not a globally unique executor key. Before addressing a shared receiver, an
+application adapter must namespace it by deployment, Durable Object class, cell
+identity, and local action ID. The base runtime does not yet construct or
+enforce that operation identity.
+
+Outcomes:
+
+- **delivered:** a receipt was persisted;
+- **failed:** the retry ceiling was exhausted before a successful receipt;
+- **ambiguous:** an unsafe action threw after dispatch could have begun;
+- **pending/delivering:** work or lease recovery remains.
+
+Every terminal action produces a deduplicated internal event such as
+`protein.action.delivered`. The terminal status and result-or-error plus its
+outcome event are inserted in one SQLite transaction, so a restart cannot
+strand a delivered action without its follow-up event. Application logic uses
+that event to finish or advance the run.
+
+### Exactly-once boundary
+
+Protein cannot atomically commit SQLite and a remote API call. Revision fencing
+prevents stale local results from winning but cannot retract a remote call.
+If an action lease is shorter than the real executor latency, a recovery alarm
+can dispatch an overlapping retry while the first request is still live.
+Idempotency or authoritative reconciliation is therefore required even without
+a node crash; lease duration is not a cancellation mechanism.
+
+- `idempotent` receivers must honor the globally namespaced operation key.
+- `reconcilable` handlers must implement an authoritative lookup. Protein calls
+  it before every dispatch because a crash can erase the local marker.
+- `unsafe` actions become ambiguous after an uncertain dispatch only when the
+  dispatch marker survives recovery. The real-celld crash matrix proved that
+  bucket recovery can lose this marker and redeliver the action. Consequently,
+  automatic unsafe effects are not production-safe on the tested celld release.
+
+The same matrix observed redelivery even after the local receipt/outcome
+transaction and `action.committed` checkpoint. A completed local SQLite commit
+is not evidence that its replica is already recoverable by a fresh celld node.
+See [PROOFS.md](./PROOFS.md).
+
+Model calls have the same fundamental ambiguity if performed inside
+`onAgentEvent()`. Applications should record provider request IDs and tolerate
+repeated billing or use an idempotent model gateway.
+
+### Monotonic artifact acceptance
+
+`decideMonotonicAcceptance()` promotes a versioned child artifact only when its
+lineage names the verified parent, it preserves every gate previously passed by
+that parent, and it passes every newly required gate. Its durable receipt names
+the candidate and the artifact retained after the decision. Failed or missing
+evidence therefore retains the parent rather than allowing review or revision
+to regress established work. Repository-maintenance and formal-proof examples
+both use this primitive.
+
+## Alarm model
+
+Celld provides one alarm per cell. Protein multiplexes all event availability,
+event leases, action availability, and action leases onto it.
+
+- Pending work contributes `available_at`.
+- Claimed work contributes `lease_until`.
+- The earliest timestamp becomes the physical alarm.
+- A fired alarm always re-arms if work remains.
+- No runnable or recoverable work deletes the alarm.
+
+Retries use bounded exponential backoff. Celld's own finite alarm retry is a
+last-resort host mechanism, not the application retry policy.
+
+## Concurrency
+
+Celld runs one cell on one thread, but handlers may interleave while one awaits.
+Protein therefore never treats a model or tool call as a lock.
+
+Event and action revisions are monotonic fences:
+
+```text
+claim revision N → await external work → commit only if revision is still N
+```
+
+Cancellation and steering are expected to become events that advance the
+relevant revision. Explicit cancellation is not yet implemented.
+
+## State and WebSockets
+
+Application state is compact canonical JSON. `setState()` persists it and
+broadcasts a `protein.state` frame to hibernatable WebSocket clients.
+
+On connection the runtime sends:
+
+```json
+{
+  "type": "protein.connected",
+  "agent": "agent-name",
+  "state": {}
+}
+```
+
+Inbound messages are delegated to the optional application `onMessage()` hook.
+Important conversation history must be accepted as durable events; a live frame
+alone is not durable input.
+
+## External executor boundary
+
+RepoAgent demonstrates the intended split. The cell retains the run, action ID,
+policy, and receipt. The executor receives an HTTP request with:
+
+```http
+Idempotency-Key: run:run-1:execute
+```
+
+That reference header is the raw cell-local action ID. It is sufficient only
+when the receiver is scoped to that cell or the application already makes its
+action IDs globally unique. A shared production adapter must use the namespaced
+operation identity described above.
+
+The executor owns checkout, filesystem, commands, tests, and artifacts. Its
+response is compact JSON stored as the action receipt. Large artifacts remain
+outside the cell and should be referenced by content-addressed metadata.
+
+## Known omissions
+
+- cancellation and steering protocol;
+- human approval primitive;
+- general application-state migration hooks beyond the version-1-to-2 runtime
+  migration;
+- authentication, authorization, and secret references;
+- retention/compaction policy;
+- fleet provisioning, indexing, and observability;
+- child-agent conventions;
+- enforcement that prevents applications from selecting `unsafe` for automatic
+  high-stakes dispatch;
+- a celld replication acknowledgement or downstream owner-fencing token.
+
+These are tracked in [QUESTIONS.md](./QUESTIONS.md).

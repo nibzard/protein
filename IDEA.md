@@ -1,42 +1,167 @@
-# IDEA — Protein
+# Protein — product thesis
 
 ## Thesis
 
-**The cell is the right unit of agent work.** celld's Durable Object — one exactly-one-owner actor with its own private SQLite, hibernating between events, woken by alarms — is sized almost perfectly for a *bounded, stateful, event-shaped* agent. Protein is the framework for that unit, and it deliberately refuses to grow past that fit.
+The celld-native agent primitive is an identity-centered durable actor:
 
-The alternative most frameworks pick — a giant, long-running, in-memory exploratory loop — fights every constraint celld imposes (short-lived bounded workers, alarm-only timers, no Node, no blobs). Protein treats those constraints as the design, not as obstacles.
+> A named cell receives events, reconciles them against private state, commits
+> action intent before external execution, records results, and hibernates when
+> it has no runnable work.
 
-## The metaphor (used with discipline)
+The agent is not an always-running LLM process. A model is one possible decision
+function inside a bounded activation. A goal is a run inside an agent, not the
+agent's identity.
 
-- **Cell** = a celld Durable Object. The organism. Owns a private SQLite, exactly-one-owner across the fleet.
-- **Protein** = one agent. A cheap, specialized, short-lived functional unit the cell *expresses on demand*, folded to one job, then dormant.
-- **DNA** = durable state and skills. Rows in the cell's SQLite, replicated to S3 via LTX.
-- **Translation** = the LLM call over outbound `fetch`. It *translates* a step's intent into a concrete action. (Ribosomes translate; they do not fold — so we say "translation," not "folding," for the model step.)
+Protein exists only if this actor shape is materially easier and safer than
+assembling the same behavior from a shared database, scheduler, queue, leases,
+WebSocket service, and outbox.
 
-The metaphor is a sizing discipline, not decoration: a protein is a small folded unit, not an organism. Whenever a design choice risks turning a protein into an organism, the metaphor says stop.
+## Why celld changes the design
 
-## Design principles
+Celld makes four things unusually direct:
 
-1. **One cell per agent.** Single-owner by name. Never hand-roll locks, leases, or job queues — celld's compare-and-swap already serializes each cell's work.
-2. **One bounded step per wake.** An alarm fires a short, CPU/wall-clock-bounded worker. Multi-step reasoning is *paced across alarms*, never run as one long synchronous loop.
-3. **DNA in SQLite.** All durable memory, conversation, and skills live in the cell's own SQLite (`ctx.storage.sql`), LTX-replicated to S3. No external database to operate.
-4. **Hibernate between steps.** Near-zero idle cost. A fleet of long-lived agents costs nothing while waiting; you pay for steps actually taken.
-5. **No lock-in — platform or model.** celld runs on your own machines with no Cloudflare account; the LLM is plain outbound `fetch` to any provider. celld's *absences* (`env.AI`, KV, R2-as-blob, Vectorize) are the feature.
-6. **Inspectable by construction.** An agent's durable state is a SQLite database you query on a machine you control — not a managed-edge black box.
-7. **Idempotent, resumable steps.** Re-arm only after the step's writes are durable. A crash loses at most the in-flight step; the agent resumes from durable state.
-8. **Stay portable.** The celld-coupling lives behind one interface. If celld stalls, agents retarget Restate, Rivet, or workerd without rewriting.
+1. **Named ownership.** A user, repository, service, device, or room maps to a
+   stable address and an intended active cell owner. The tested celld release
+   can temporarily produce overlapping owners under partition and clock skew;
+   see [PROOFS.md](./PROOFS.md).
+2. **Private transactional state.** The agent's compact memory and lifecycle
+   ledger live beside its code in SQLite.
+3. **Event-shaped residency.** HTTP, RPC, WebSockets, and alarms wake the cell;
+   it can leave memory between events.
+4. **Self-hosted placement.** State is replicated to an operator-owned
+   S3-compatible bucket rather than a managed Durable Objects account.
 
-## What Protein is *not*
+Celld does not make arbitrary async JavaScript durable and does not provide an
+OS sandbox. That leads to a control-plane/data-plane split:
 
-- **Not a giant exploratory agent brain.** Long, tight, many-turn LLM loops with large blob output belong in a Node process (e.g., Wire), not in a cell. Protein is for bounded, scheduled, action-shaped work.
-- **Not a general durable-execution / workflow engine.** Temporal, Restate, and Windmill own that category. Protein is narrower: the small bounded agent.
-- **Not an all-in-one agent platform.** No managed UI, RBAC, vector store, or compliance accreditation. Teams wanting a packaged product go to Lyzr or Palantir; Protein is the open runtime underneath.
-- **Not married to celld.** celld is the first target, chosen for its Cloudflare-DO-API compatibility and self-hosted-no-account model. The portable interface keeps the exit open.
+- the cell owns identity, decisions, runs, approvals, action intent, receipts,
+  and client continuity;
+- external services own Git workspaces, shells, browsers, GPUs, large blobs,
+  and specialized tools.
 
-## North star
+## Agent, run, and workflow
 
-> Make expressing a self-hosted, durable, no-lock-in agent as simple as writing one function that takes a step — where the durability, the single-ownership, the scheduling, and the memory are the cell's job, not yours.
+These are different units:
 
-## Success looks like
+- **Agent:** an open-ended identity that wakes on events and may exist for
+  months or years.
+- **Run:** one goal or task governed by that identity.
+- **Turn:** one bounded decision attempt within a run.
+- **Action:** a durable request to change or query an external system.
+- **Workflow:** a finite run-to-completion program with durable step replay.
 
-A developer writes a single `step()` method, deploys to their own celld fleet, points it at any LLM, and gets an agent that remembers, schedules itself, survives crashes, and costs nothing while idle — without operating a database, a queue, or a Cloudflare account.
+Protein implements the first four. It should integrate with a workflow engine
+when a run becomes a large pipeline rather than recreating durable continuations
+inside a cell.
+
+## Demand filter
+
+A use case creates real demand for Protein only when most of these are true:
+
+- there are hundreds or thousands of independently addressed agents;
+- each owns small, private, long-lived state;
+- most are inactive most of the time;
+- several event sources can target the same identity;
+- ordering and deduplication matter within that identity;
+- users need to reconnect to live work;
+- self-hosting or customer-premises deployment matters;
+- large compute and artifacts can remain outside the cell.
+
+“Durable,” “uses an LLM,” or “runs on a timer” are not sufficient. Cron,
+Postgres, serverless schedulers, Restate, Temporal, Rivet, and source-native
+automation already cover large parts of that space.
+
+## Strongest use cases
+
+### 1. Embedded per-customer agent fleets
+
+A B2B product provisions one agent per customer account, workspace, or owned
+resource. Each instance has private preferences, ongoing runs, integrations,
+and reconnectable state. The product already owns authentication and fleet
+provisioning; Protein supplies the per-agent lifecycle.
+
+This is the strongest economic driver because the repeated keyed-state and
+lifecycle problem appears at fleet scale.
+
+### 2. Repository engineering agents
+
+One cell represents a repository and retains repository policy, conversations,
+runs, approvals, action receipts, CI callbacks, and review feedback. An external
+executor checks out the repository and runs commands.
+
+This is the strongest reference harness. It exercises interactive sessions,
+long waits, tool callbacks, duplicate webhooks, restart recovery, and external
+effects without pretending celld is a shell host.
+
+### 3. Service and incident agents
+
+One cell per service or incident reconciles alerts, deployments, operator chat,
+diagnostic results, and remediation approvals. It can keep live WebSocket
+clients during an incident and hibernate afterward.
+
+### 4. Device and site agents
+
+One cell per device, vehicle, facility, or site receives sparse events,
+maintains local history, schedules maintenance decisions, and coordinates
+external systems. It is not a hard-real-time controller.
+
+### 5. Persistent rooms, communities, and characters
+
+Rooms and AI characters naturally need stable identity, private state,
+real-time connections, and cheap inactivity. This is architecturally native
+even when the model behavior is simple.
+
+### 6. Sovereign organizational assistants
+
+One agent per employee, team, or account keeps memory and integration state on
+customer-controlled infrastructure. A fleet may justify celld; one personal
+assistant usually does not.
+
+## False fits
+
+Protein should reject these as primary demand evidence:
+
+- one webpage watcher or a handful of reminders;
+- one-shot research, summarization, or coding;
+- continuously busy agents;
+- global shared-memory swarms;
+- ETL and report-generation pipelines;
+- GPU inference or high-rate telemetry processing;
+- shell, browser, or Git execution inside the cell;
+- exactly-once payments or other non-reconcilable side effects;
+- hostile user-supplied code on the current celld alpha.
+
+The earlier 100-case exercise remains in [CASE-LIBRARY.md](./CASE-LIBRARY.md),
+but most entries demonstrate that the runtime *could* host a case. They do not
+show that anyone would deploy celld for it.
+
+## Product decision
+
+Protein should remain a small celld-native runtime and compatibility profile:
+
+- use the Durable Objects API rather than inventing a platform-neutral lowest
+  common denominator;
+- keep the model and tool harness replaceable;
+- add durable event/action semantics celld does not supply;
+- make external execution a first-class capability boundary;
+- publish measured compatibility and failure behavior;
+- avoid absorbing provisioning, tenancy, global search, secrets, or workflow
+  orchestration.
+
+Cloudflare's Agents SDK is valuable prior art and a compatibility target, but
+the current full bundle is too broad for Protein's minimal fleet premise and
+its detached `queue()` behavior is unsafe for awaited work on celld. See
+[COMPATIBILITY.md](./COMPATIBILITY.md).
+
+## Continue and stop conditions
+
+Continue if design partners need large customer-controlled fleets and Protein
+removes meaningful per-identity lifecycle code.
+
+Shrink Protein to examples or upstream contributions if:
+
+- normal services plus Postgres remain just as simple;
+- users prefer Restate, Temporal, Rivet, or managed Durable Objects;
+- celld's ownership and recovery model cannot meet the required envelope;
+- the external executor boundary dominates the product;
+- fleet observability, auth, and provisioning become the real project.

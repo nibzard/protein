@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "protein-crash-retry-protocol/v1",
+  "scope": "Logical external effects for reconcilable Protein actions after dispatch uncertainty. Unsafe actions are negative compatibility cases because at-most-once delivery cannot be established without receiver support.",
+  "state": {
+    "phase": ["pending", "ambiguous", "committed"],
+    "effects": { "minimum": 0, "maximum": 3 },
+    "receipt": "boolean",
+    "reconciled": "boolean"
+  },
+  "initial": { "phase": "pending", "effects": 0, "receipt": false, "reconciled": false },
+  "transitions": [
+    "dispatch_ok",
+    "timeout_applied",
+    "timeout_not_applied",
+    "retry_ambiguous",
+    "reconcile_applied",
+    "reconcile_not_applied",
+    "crash_recover"
+  ],
+  "patches": ["buggy", "require_reconciliation", "retry_without_effect", "payload_guard"],
+  "lemmas": [
+    "effect_at_most_once",
+    "committed_has_receipt",
+    "receipt_means_committed",
+    "committed_has_effect",
+    "ambiguous_has_no_receipt",
+    "ambiguous_is_unreconciled",
+    "pending_is_clean",
+    "phase_shape"
+  ],
+  "properties": ["at_most_once", "committed_receipt", "receipt_committed", "committed_effect"],
+  "runtimeProjection": {
+    "pending": ["action.committed"],
+    "uncertain": ["action.dispatch_started", "executor.request_received", "executor.accepted"],
+    "reconciliation": ["action.reconciling", "executor.lookup"],
+    "committed": ["action.delivered"],
+    "terminalAmbiguous": ["action.ambiguous"]
+  },
+  "forbiddenRuntimePattern": ["action.dispatch_started", "uncertain_receipt", "action.dispatch_started_without_reconciliation"]
+}
