@@ -1,0 +1,25 @@
+# ADR: Protein Architecture v1
+
+## Status
+Accepted
+
+## Context
+The runtime, crash suites, cellular comparisons, repository-maintenance pilot, formal protocol work, and 27-cell compute fabric produced enough evidence to settle the first architecture boundary. The evidence also falsified exactly-once unsafe effects, unconditional single-owner routing, and a general swarm-intelligence advantage.
+
+## Decision
+Use one named celld cell as one durable agent identity and compact control plane. Persist events, runs, action intent, revisions, outcomes, and journals in the cell. Keep models, evaluators, Linux sandboxes, large artifacts, fleet indexing, and global budgets external. Require idempotent or authoritatively reconcilable capabilities, globally namespaced operation identity, typed artifact/evidence exchange, and monotonic acceptance. Keep grids, cubes, roles, generations, and scoring in applications and experiments.
+
+## Alternatives Considered
+- Always-running LLM processes inside cells: rejected because identity and durable state should outlive resident compute.
+- A monolithic framework owning workflows, sandboxes, and fleet control: rejected because those responsibilities have different durability and scaling boundaries.
+- Exactly-once or unsafe automatic effects: rejected by the crash and stale-owner evidence.
+- Treating larger populations as inherently smarter: rejected by the fixed-quality comparisons and formal cube preflight.
+
+## Consequences
+Protein remains small, model-neutral, and celld-native. External capabilities must retain jobs and receipts for reconciliation. Shared executors still need enforced cross-cell operation namespacing. Authentication, approval, retention, continuous self-routing, multi-host owner fencing, and production high-stakes safety remain open.
+
+## References
+- ARCHITECTURE.md
+- RUNTIME.md
+- PROOFS.md
+- examples/compute-fabric-cube/RESULT.md
