@@ -1,0 +1,6 @@
+# Follow-up
+
+- Enforce globally namespaced operation identity in the shared capability API.
+- Re-run ownership proofs after celld gains verified owner fencing and recovery acknowledgement.
+- Add authentication, approvals, retention, cancellation, and fleet controls before production use.
+- Test a continuous, less centrally orchestrated population with constrained capability pools.
