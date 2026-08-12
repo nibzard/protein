@@ -1,0 +1,1875 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="An evidence-led account of the Protein project: what we learned, what we built, what failed, and the architecture that emerged.">
+  <meta name="theme-color" content="#185cae">
+  <title>Protein — what we learned and how we got here</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: oklch(1 0 0);
+      --surface: oklch(0.965 0.008 252);
+      --surface-strong: oklch(0.925 0.025 252);
+      --ink: oklch(0.18 0.025 252);
+      --muted: oklch(0.40 0.028 252);
+      --primary: oklch(0.478 0.136 251.8);
+      --primary-dark: oklch(0.31 0.105 252);
+      --primary-pale: oklch(0.93 0.035 252);
+      --signal: oklch(0.70 0.17 52);
+      --signal-dark: oklch(0.42 0.13 45);
+      --signal-pale: oklch(0.95 0.04 52);
+      --positive: oklch(0.54 0.12 153);
+      --positive-dark: oklch(0.34 0.09 153);
+      --positive-pale: oklch(0.95 0.03 153);
+      --inference: oklch(0.51 0.12 300);
+      --inference-pale: oklch(0.95 0.03 300);
+      --rule: oklch(0.86 0.016 252);
+      --white: oklch(1 0 0);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --ease: cubic-bezier(.16, 1, .3, 1);
+      --rail: 16rem;
+      --content: 78rem;
+      --z-sticky: 20;
+      --z-progress: 30;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 1rem; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 17px/1.65 var(--sans);
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--primary-dark); text-decoration-thickness: .08em; text-underline-offset: .18em; }
+    a:hover { color: var(--primary); }
+    :focus-visible { outline: 3px solid var(--signal); outline-offset: 4px; }
+    h1, h2, h3, h4 { text-wrap: balance; }
+    p, li { text-wrap: pretty; }
+    p { max-width: 72ch; }
+    code, .mono { font-family: var(--mono); }
+    code { font-size: .9em; }
+    svg { max-width: 100%; }
+
+    .skip-link {
+      position: fixed;
+      top: .8rem;
+      left: .8rem;
+      z-index: 40;
+      transform: translateY(-180%);
+      padding: .65rem .9rem;
+      border-radius: 6px;
+      background: var(--ink);
+      color: var(--white);
+    }
+    .skip-link:focus { transform: translateY(0); }
+    .reading-progress {
+      position: fixed;
+      inset: 0 0 auto;
+      z-index: var(--z-progress);
+      height: 4px;
+      background: transparent;
+      pointer-events: none;
+    }
+    .reading-progress span {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: var(--signal);
+      transform-origin: left;
+    }
+
+    .hero {
+      min-height: 94svh;
+      display: grid;
+      grid-template-columns: minmax(0, 1.18fr) minmax(25rem, .82fr);
+      background: var(--primary);
+      color: var(--white);
+      overflow: hidden;
+    }
+    .hero-copy {
+      min-height: 94svh;
+      padding: clamp(1.5rem, 6vw, 6.5rem);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 3rem;
+    }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem 1.5rem;
+      font: 700 .75rem/1.45 var(--mono);
+    }
+    .hero-title { margin: auto 0; }
+    .hero h1 {
+      margin: 0;
+      max-width: 10ch;
+      font-size: clamp(3.4rem, 8vw, 6rem);
+      line-height: .93;
+      letter-spacing: -.038em;
+    }
+    .hero h1 span { display: block; color: oklch(0.91 0.11 63); }
+    .hero-lede {
+      margin: 1.75rem 0 0;
+      max-width: 53ch;
+      font-size: clamp(1.12rem, 1.7vw, 1.38rem);
+      line-height: 1.48;
+    }
+    .hero-foot {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem 2.5rem;
+      align-items: end;
+    }
+    .hero-foot p {
+      margin: 0;
+      max-width: 48ch;
+      font-size: .88rem;
+      line-height: 1.5;
+      color: color-mix(in oklch, var(--white), transparent 13%);
+    }
+    .hero-foot a { color: var(--white); }
+    .hero-visual {
+      min-width: 0;
+      padding: clamp(1.5rem, 4vw, 4rem);
+      display: flex;
+      align-items: center;
+      background: var(--primary-dark);
+      position: relative;
+    }
+    .hero-visual::before {
+      content: "";
+      position: absolute;
+      inset: 7%;
+      border: 1px solid color-mix(in oklch, var(--white), transparent 72%);
+      border-radius: 14px;
+    }
+    .hero-visual figure { width: 100%; margin: 0; position: relative; }
+    .hero-visual svg { width: 100%; height: auto; display: block; }
+    .hero-visual figcaption {
+      margin: 1.2rem auto 0;
+      max-width: 44ch;
+      font: .76rem/1.5 var(--mono);
+      color: color-mix(in oklch, var(--white), transparent 18%);
+    }
+    .node-pulse { animation: pulse 2.8s var(--ease) infinite alternate; transform-origin: center; }
+    .boundary-draw { stroke-dasharray: 900; stroke-dashoffset: 900; animation: draw 1.3s var(--ease) .1s both; }
+    @keyframes pulse { from { opacity: .55; } to { opacity: 1; } }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+
+    .layout { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); }
+    .toc {
+      position: sticky;
+      top: 0;
+      z-index: var(--z-sticky);
+      height: 100svh;
+      overflow-y: auto;
+      padding: 2rem 1.35rem;
+      border-right: 1px solid var(--rule);
+      background: var(--bg);
+    }
+    .toc-brand { display: block; margin-bottom: 1.2rem; font-weight: 800; }
+    .toc ol { margin: 0; padding: 0; list-style: none; }
+    .toc li + li { margin-top: .18rem; }
+    .toc a {
+      display: grid;
+      grid-template-columns: 1.5rem minmax(0, 1fr);
+      gap: .35rem;
+      padding: .3rem 0;
+      color: var(--muted);
+      font-size: .79rem;
+      line-height: 1.35;
+      text-decoration: none;
+    }
+    .toc a::before {
+      content: attr(data-index);
+      color: color-mix(in oklch, var(--muted), transparent 25%);
+      font: .7rem/1.6 var(--mono);
+    }
+    .toc a:hover, .toc a[aria-current="true"] { color: var(--primary-dark); }
+    .toc a[aria-current="true"] { font-weight: 750; }
+    .toc-key {
+      margin-top: 1.5rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--rule);
+      font-size: .74rem;
+      color: var(--muted);
+    }
+    .toc-key p { margin: .4rem 0 0; }
+
+    main { min-width: 0; }
+    section {
+      padding: clamp(4.5rem, 8vw, 8rem) clamp(1.3rem, 7vw, 7rem);
+      scroll-margin-top: 1rem;
+    }
+    section.tinted { background: var(--surface); }
+    section.dark { background: var(--ink); color: var(--white); }
+    section.blue { background: var(--primary-dark); color: var(--white); }
+    .measure { width: min(100%, var(--content)); margin-inline: auto; }
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(12rem, .42fr) minmax(0, 1fr);
+      gap: clamp(2rem, 7vw, 7rem);
+      align-items: start;
+      margin-bottom: clamp(2.5rem, 6vw, 5rem);
+    }
+    .section-head h2 {
+      margin: 0;
+      font-size: clamp(2.1rem, 4.3vw, 4rem);
+      line-height: 1;
+      letter-spacing: -.035em;
+    }
+    .section-head p {
+      margin: .3rem 0 0;
+      max-width: 66ch;
+      color: var(--muted);
+      font-size: 1.08rem;
+    }
+    .dark .section-head p, .blue .section-head p { color: color-mix(in oklch, var(--white), transparent 24%); }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: .42rem;
+      padding: .24rem .58rem;
+      border-radius: 999px;
+      font: 750 .68rem/1.25 var(--mono);
+      white-space: nowrap;
+    }
+    .status::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; }
+    .status.observed { background: var(--positive-pale); color: var(--positive-dark); }
+    .status.decision { background: var(--primary-pale); color: var(--primary-dark); }
+    .status.inference { background: var(--inference-pale); color: oklch(0.37 0.11 300); }
+    .status.open { background: var(--signal-pale); color: var(--signal-dark); }
+    .dark .status.observed, .blue .status.observed { background: var(--positive); color: var(--white); }
+    .dark .status.decision, .blue .status.decision { background: var(--primary); color: var(--white); }
+    .dark .status.inference, .blue .status.inference { background: var(--inference); color: var(--white); }
+    .dark .status.open, .blue .status.open { background: var(--signal); color: var(--ink); }
+
+    .executive {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(18rem, .65fr);
+      gap: clamp(2rem, 7vw, 7rem);
+      align-items: start;
+      margin-bottom: clamp(3.5rem, 7vw, 6rem);
+    }
+    .executive blockquote {
+      margin: 0;
+      font-size: clamp(1.55rem, 3.1vw, 2.8rem);
+      line-height: 1.22;
+      letter-spacing: -.025em;
+      font-weight: 720;
+    }
+    .executive aside {
+      padding-top: .5rem;
+      border-top: 4px solid var(--signal);
+      color: var(--muted);
+    }
+    .executive aside p { margin: .8rem 0 0; font-size: .9rem; }
+
+    .lesson-stack { border-bottom: 1px solid var(--rule); }
+    .lesson {
+      display: grid;
+      grid-template-columns: 4rem minmax(13rem, .68fr) minmax(0, 1.32fr);
+      gap: clamp(1rem, 4vw, 4rem);
+      padding: clamp(1.6rem, 4vw, 3rem) 0;
+      border-top: 1px solid var(--rule);
+      align-items: start;
+    }
+    .lesson-mark {
+      font: 800 clamp(1.2rem, 2.2vw, 2rem)/1 var(--mono);
+      color: var(--primary);
+    }
+    .lesson h3 { margin: 0; font-size: clamp(1.25rem, 2.2vw, 1.8rem); line-height: 1.18; }
+    .lesson-body p { margin: .75rem 0 0; color: var(--muted); }
+    .lesson-proof {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem 1rem;
+      margin-top: 1rem;
+      font: .74rem/1.45 var(--mono);
+      color: var(--primary-dark);
+    }
+
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      margin-bottom: 1.4rem;
+    }
+    .filter-bar button {
+      appearance: none;
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      padding: .48rem .75rem;
+      background: var(--bg);
+      color: var(--muted);
+      font: 750 .74rem/1 var(--mono);
+      cursor: pointer;
+    }
+    .filter-bar button:hover, .filter-bar button[aria-pressed="true"] {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: var(--white);
+    }
+    .table-wrap { overflow-x: auto; }
+    .table-wrap:focus-visible,
+    .architecture-map:focus-visible,
+    .hero-visual:focus-visible,
+    .chart-shell:focus-visible {
+      outline: 3px solid var(--signal);
+      outline-offset: -3px;
+    }
+    table { width: 100%; min-width: 58rem; border-collapse: collapse; font-size: .88rem; }
+    th, td { padding: .9rem 1rem; border-bottom: 1px solid var(--rule); vertical-align: top; text-align: left; }
+    th { font: 750 .7rem/1.35 var(--mono); color: var(--muted); }
+    tbody tr { transition: background 180ms var(--ease); }
+    tbody tr:hover { background: color-mix(in oklch, var(--primary-pale), transparent 35%); }
+    tbody tr[hidden] { display: none; }
+    td strong { display: block; }
+    td small { display: block; margin-top: .2rem; color: var(--muted); }
+    .metric { font: 800 .9rem/1.35 var(--mono); color: var(--primary-dark); }
+
+    .chart-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(17rem, .75fr);
+      gap: clamp(1.5rem, 4vw, 3.5rem);
+      margin-top: clamp(2.5rem, 6vw, 5rem);
+      align-items: stretch;
+    }
+    .chart-shell {
+      padding: clamp(1rem, 3vw, 2rem);
+      border: 1px solid var(--rule);
+      border-radius: 14px;
+      background: var(--bg);
+    }
+    .chart-shell h3 { margin: 0; font-size: 1.05rem; }
+    .chart-shell > p { margin: .35rem 0 1.3rem; color: var(--muted); font-size: .86rem; }
+    .chart-shell svg { width: 100%; height: auto; display: block; }
+    .chart-shell figcaption { margin-top: .8rem; color: var(--muted); font-size: .8rem; }
+    .evidence-note {
+      padding: clamp(1.3rem, 3vw, 2rem);
+      border-radius: 14px;
+      background: var(--ink);
+      color: var(--white);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .evidence-note strong { display: block; font-size: clamp(1.3rem, 2.4vw, 2rem); line-height: 1.2; }
+    .evidence-note p { color: color-mix(in oklch, var(--white), transparent 20%); font-size: .9rem; }
+    .evidence-note .mono { color: oklch(0.83 0.12 63); font-size: .75rem; }
+
+    .chapter-list { border-top: 1px solid var(--rule); }
+    .chapter {
+      display: grid;
+      grid-template-columns: 4.5rem minmax(0, 1.15fr) minmax(17rem, .65fr);
+      gap: clamp(1.2rem, 4vw, 4rem);
+      padding: clamp(2rem, 5vw, 4rem) 0;
+      border-bottom: 1px solid var(--rule);
+      align-items: start;
+    }
+    .chapter-number {
+      font: 800 clamp(1.2rem, 2.4vw, 2.2rem)/1 var(--mono);
+      color: var(--primary);
+    }
+    .chapter-copy h3 { margin: 0; font-size: clamp(1.4rem, 2.8vw, 2.25rem); line-height: 1.12; letter-spacing: -.02em; }
+    .chapter-copy .date { margin: .5rem 0 1.1rem; font: .75rem/1.4 var(--mono); color: var(--muted); }
+    .chapter-copy p { color: var(--muted); }
+    .chapter-copy p strong { color: var(--ink); }
+    .chapter-copy ul { margin: 1rem 0 0; padding-left: 1.15rem; color: var(--muted); }
+    .chapter-copy li + li { margin-top: .55rem; }
+    .chapter-evidence {
+      padding-top: .25rem;
+      font-size: .84rem;
+    }
+    .chapter-evidence h4 { margin: .8rem 0 .5rem; font-size: .8rem; font-family: var(--mono); }
+    .chapter-evidence p { margin: .4rem 0 0; color: var(--muted); }
+    .chapter-evidence .result {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 10px;
+      background: var(--surface);
+    }
+    .chapter-evidence .result strong { display: block; color: var(--ink); }
+    .chapter-evidence .result span { display: block; margin-top: .25rem; color: var(--muted); }
+    .chapter.risk-chapter .chapter-number { color: var(--signal-dark); }
+    .chapter.risk-chapter .result { background: var(--signal-pale); }
+
+    .callout {
+      margin: clamp(2rem, 5vw, 4rem) 0;
+      padding: clamp(1.4rem, 4vw, 3rem);
+      border-radius: 14px;
+      background: var(--primary-dark);
+      color: var(--white);
+    }
+    .callout p { margin: 0; max-width: 62ch; font-size: clamp(1.25rem, 2.5vw, 2rem); line-height: 1.3; }
+    .callout small { display: block; margin-top: 1rem; font: .75rem/1.5 var(--mono); color: color-mix(in oklch, var(--white), transparent 20%); }
+
+    .architecture-map {
+      margin: 2rem 0 0;
+      padding: clamp(1rem, 3vw, 2rem);
+      border: 1px solid color-mix(in oklch, var(--white), transparent 72%);
+      border-radius: 14px;
+      background: color-mix(in oklch, var(--primary-dark), var(--ink) 24%);
+    }
+    .architecture-map svg { width: 100%; height: auto; display: block; }
+    .architecture-map figcaption { color: color-mix(in oklch, var(--white), transparent 25%); font-size: .8rem; }
+
+    .definition-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1px;
+      background: var(--rule);
+      border: 1px solid var(--rule);
+      margin-top: 3rem;
+    }
+    .definition-grid article { padding: clamp(1.3rem, 3vw, 2.2rem); background: var(--bg); }
+    .definition-grid h3 { margin: 0; font-size: 1.05rem; }
+    .definition-grid p { margin: .5rem 0 0; color: var(--muted); font-size: .9rem; }
+    .definition-grid code { color: var(--primary-dark); }
+
+    .tier-list { margin-top: 3rem; border-top: 1px solid var(--rule); }
+    .tier {
+      display: grid;
+      grid-template-columns: 7rem minmax(12rem, .55fr) minmax(0, 1fr);
+      gap: clamp(1rem, 3vw, 3rem);
+      padding: 1.5rem 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .tier-index { font: 800 1rem/1.4 var(--mono); color: var(--primary); }
+    .tier h3 { margin: 0; font-size: 1rem; }
+    .tier p { margin: 0; color: var(--muted); font-size: .9rem; }
+
+    .split-boundary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      overflow: hidden;
+      border: 1px solid var(--rule);
+      border-radius: 14px;
+    }
+    .split-boundary > div { padding: clamp(1.5rem, 4vw, 3rem); }
+    .split-boundary > div:last-child { background: var(--signal-pale); }
+    .split-boundary h3 { margin: 0; font-size: clamp(1.3rem, 2.4vw, 2rem); }
+    .split-boundary ul { padding-left: 1.15rem; }
+    .split-boundary li + li { margin-top: .6rem; }
+
+    .next-list { border-top: 1px solid color-mix(in oklch, var(--white), transparent 70%); }
+    .next-item {
+      display: grid;
+      grid-template-columns: 3.5rem minmax(14rem, .65fr) minmax(0, 1.35fr);
+      gap: clamp(1rem, 4vw, 4rem);
+      padding: 1.8rem 0;
+      border-bottom: 1px solid color-mix(in oklch, var(--white), transparent 70%);
+    }
+    .next-item b { font: 800 1rem/1.4 var(--mono); color: oklch(0.84 0.12 63); }
+    .next-item h3 { margin: 0; font-size: 1.2rem; }
+    .next-item p { margin: 0; color: color-mix(in oklch, var(--white), transparent 22%); }
+
+    .source-list { margin: 0; padding: 0; list-style: none; counter-reset: source; }
+    .source-list li {
+      counter-increment: source;
+      display: grid;
+      grid-template-columns: 3rem minmax(0, 1fr);
+      gap: .7rem;
+      padding: 1rem 0;
+      border-top: 1px solid var(--rule);
+    }
+    .source-list li::before {
+      content: counter(source, decimal-leading-zero);
+      color: var(--primary);
+      font: 800 .75rem/1.7 var(--mono);
+    }
+    .source-list strong { display: block; }
+    .source-list small { display: block; margin-top: .25rem; color: var(--muted); }
+    .method-note {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 4px solid var(--signal);
+      color: var(--muted);
+      font-size: .9rem;
+    }
+
+    footer {
+      padding: 3rem clamp(1.3rem, 7vw, 7rem);
+      background: var(--primary);
+      color: var(--white);
+    }
+    .footer-inner {
+      width: min(100%, var(--content));
+      margin: auto;
+      display: flex;
+      justify-content: space-between;
+      gap: 2rem;
+      align-items: end;
+    }
+    footer p { margin: 0; }
+    footer small { display: block; color: color-mix(in oklch, var(--white), transparent 18%); }
+    footer a { color: var(--white); }
+
+    @media (max-width: 1050px) {
+      .hero { grid-template-columns: 1fr; }
+      .hero-copy { min-height: 72svh; }
+      .hero-visual { min-height: 35rem; }
+      .layout { display: block; }
+      .toc {
+        position: static;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--rule);
+      }
+      .toc ol { columns: 2; column-gap: 2rem; }
+      .toc li { break-inside: avoid; }
+      .toc-key { display: none; }
+      .chapter { grid-template-columns: 3.5rem minmax(0, 1fr); }
+      .chapter-evidence { grid-column: 2; }
+    }
+    @media (max-width: 760px) {
+      body { font-size: 16px; }
+      .hero-copy { min-height: 78svh; }
+      .hero h1 { font-size: clamp(3.2rem, 16vw, 5rem); }
+      .hero-visual { min-height: 27rem; }
+      .toc ol { columns: 1; }
+      .section-head, .executive, .chart-grid { grid-template-columns: 1fr; }
+      .lesson { grid-template-columns: 2.5rem minmax(0, 1fr); }
+      .lesson-body { grid-column: 2; }
+      .chapter { grid-template-columns: 2.5rem minmax(0, 1fr); }
+      .definition-grid, .split-boundary { grid-template-columns: 1fr; }
+      .tier { grid-template-columns: 4.5rem minmax(0, 1fr); }
+      .tier p { grid-column: 2; }
+      .next-item { grid-template-columns: 2.5rem minmax(0, 1fr); }
+      .next-item p { grid-column: 2; }
+      .hero-visual,
+      .architecture-map,
+      .chart-shell { overflow-x: auto; }
+      .hero-visual figure { min-width: 32rem; }
+      .architecture-map svg { min-width: 54rem; }
+      .chart-shell svg { min-width: 42rem; }
+      .footer-inner { display: block; }
+      .footer-inner > :last-child { margin-top: 1rem; }
+    }
+    @media (max-width: 430px) {
+      .hero-meta { display: block; }
+      .hero-meta span { display: block; margin-bottom: .3rem; }
+      .hero-foot { display: block; }
+      .hero-foot p + p { margin-top: 1rem; }
+      .hero-visual { min-height: 21rem; }
+      .chapter, .lesson { gap: .75rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
+    @media print {
+      .skip-link, .reading-progress, .toc, .filter-bar { display: none; }
+      .layout { display: block; }
+      .hero {
+        min-height: auto;
+        display: block;
+        background: var(--white) !important;
+        color: var(--ink) !important;
+      }
+      .hero-copy { min-height: auto; }
+      .hero-visual { display: none; }
+      .hero h1 span { color: var(--signal-dark); }
+      .hero-foot p, .hero-lede { color: var(--ink) !important; }
+      .hero a { color: var(--primary-dark); }
+      .dark, .blue, footer, .callout, .evidence-note {
+        background: var(--white) !important;
+        color: var(--ink) !important;
+      }
+      .dark .section-head p, .blue .section-head p,
+      .next-item p, footer small, footer a {
+        color: var(--ink) !important;
+      }
+      .architecture-map {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      section { padding: 2.5rem 0; }
+      .chapter, .lesson, .chart-grid, .split-boundary { break-inside: avoid; }
+      a { color: inherit; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to report</a>
+  <div class="reading-progress" aria-hidden="true"><span></span></div>
+
+  <header class="hero" id="top">
+    <div class="hero-copy">
+      <div class="hero-meta">
+        <span>PROTEIN / PROJECT OVERVIEW</span>
+        <span>08–11 AUG 2026</span>
+        <span>ARCHITECTURE v1</span>
+      </div>
+      <div class="hero-title">
+        <h1>What Protein <span>taught us.</span></h1>
+        <p class="hero-lede">Durable agents become useful when a cell remembers, external compute escalates only when needed, and evidence rather than agent confidence decides what survives. A larger population creates value only when its interactions change real work.</p>
+      </div>
+      <div class="hero-foot">
+        <p><strong>Reading order:</strong> conclusions first, then the complete build history, including the dead ends and rejected scale-ups.</p>
+        <p><a href="https://github.com/nibzard/protein/tree/01c78461bcac195107a810e562f06eb116315254">Repository at commit <span class="mono">01c7846</span></a></p>
+      </div>
+    </div>
+    <div class="hero-visual" tabindex="0" role="region" aria-label="Scrollable durable compute fabric diagram">
+      <figure>
+        <svg viewBox="0 0 640 650" role="img" aria-labelledby="hero-map-title hero-map-desc">
+          <title id="hero-map-title">Protein durable compute fabric</title>
+          <desc id="hero-map-desc">Twenty-seven durable cells retain state and dispatch selected work to a model, bounded evaluator, or Linux sandbox. Receipts and artifacts return to the cells.</desc>
+          <defs>
+            <marker id="arrow-white" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M0 0L8 4L0 8Z" fill="#fff"/>
+            </marker>
+          </defs>
+          <rect class="boundary-draw" x="40" y="45" width="330" height="505" rx="16" fill="none" stroke="rgba(255,255,255,.72)" stroke-width="2"/>
+          <text x="65" y="82" fill="#fff" font-family="ui-monospace, monospace" font-size="15" font-weight="700">DURABLE CELL PLANE</text>
+          <text x="65" y="105" fill="rgba(255,255,255,.68)" font-family="ui-sans-serif, sans-serif" font-size="13">identity · SQLite · inbox · alarm · receipts</text>
+          <g fill="#fff">
+            <circle cx="95" cy="165" r="9"/><circle cx="155" cy="165" r="9"/><circle cx="215" cy="165" r="9"/>
+            <circle cx="95" cy="225" r="9"/><circle cx="155" cy="225" r="9"/><circle cx="215" cy="225" r="9"/>
+            <circle cx="95" cy="285" r="9"/><circle cx="155" cy="285" r="9"/><circle cx="215" cy="285" r="9"/>
+          </g>
+          <g fill="rgba(255,255,255,.67)">
+            <circle cx="135" cy="200" r="8"/><circle cx="195" cy="200" r="8"/><circle cx="255" cy="200" r="8"/>
+            <circle cx="135" cy="260" r="8"/><circle cx="195" cy="260" r="8"/><circle cx="255" cy="260" r="8"/>
+            <circle cx="135" cy="320" r="8"/><circle cx="195" cy="320" r="8"/><circle cx="255" cy="320" r="8"/>
+          </g>
+          <g fill="rgba(255,255,255,.38)">
+            <circle cx="175" cy="235" r="7"/><circle cx="235" cy="235" r="7"/><circle cx="295" cy="235" r="7"/>
+            <circle cx="175" cy="295" r="7"/><circle cx="235" cy="295" r="7"/><circle cx="295" cy="295" r="7"/>
+            <circle cx="175" cy="355" r="7"/><circle cx="235" cy="355" r="7"/><circle cx="295" cy="355" r="7"/>
+          </g>
+          <path d="M105 410H305" stroke="rgba(255,255,255,.34)"/>
+          <text x="65" y="445" fill="#fff" font-family="ui-sans-serif, sans-serif" font-size="15" font-weight="700">Most work stays small.</text>
+          <text x="65" y="472" fill="rgba(255,255,255,.72)" font-family="ui-sans-serif, sans-serif" font-size="13">Cells retain routed work, deduplicate,</text>
+          <text x="65" y="493" fill="rgba(255,255,255,.72)" font-family="ui-sans-serif, sans-serif" font-size="13">wait, remember, and reconcile.</text>
+          <path d="M338 205C420 205 418 150 470 150" fill="none" stroke="#fff" stroke-width="2" marker-end="url(#arrow-white)"/>
+          <path d="M338 270C420 270 418 305 470 305" fill="none" stroke="#fff" stroke-width="2" marker-end="url(#arrow-white)"/>
+          <path d="M338 335C420 335 418 460 470 460" fill="none" stroke="#fff" stroke-width="2" marker-end="url(#arrow-white)"/>
+          <g class="node-pulse">
+            <rect x="470" y="105" width="130" height="88" rx="10" fill="#ec9b31"/>
+            <text x="490" y="139" fill="#172038" font-family="ui-monospace, monospace" font-size="13" font-weight="700">MODEL</text>
+            <text x="490" y="163" fill="#172038" font-family="ui-sans-serif, sans-serif" font-size="12">semantic work</text>
+          </g>
+          <g class="node-pulse" style="animation-delay:.3s">
+            <rect x="470" y="260" width="130" height="88" rx="10" fill="#fff"/>
+            <text x="490" y="294" fill="#172038" font-family="ui-monospace, monospace" font-size="13" font-weight="700">BOUNDED</text>
+            <text x="490" y="318" fill="#172038" font-family="ui-sans-serif, sans-serif" font-size="12">fixed evaluator</text>
+          </g>
+          <g class="node-pulse" style="animation-delay:.6s">
+            <rect x="470" y="415" width="130" height="88" rx="10" fill="#4ab788"/>
+            <text x="490" y="449" fill="#172038" font-family="ui-monospace, monospace" font-size="13" font-weight="700">LINUX</text>
+            <text x="490" y="473" fill="#172038" font-family="ui-sans-serif, sans-serif" font-size="12">isolated sandbox</text>
+          </g>
+          <path d="M530 193V252M530 348V407" stroke="rgba(255,255,255,.42)" stroke-dasharray="4 6"/>
+          <text x="405" y="590" fill="#fff" font-family="ui-monospace, monospace" font-size="12">ARTIFACTS + EVIDENCE + RECEIPTS</text>
+          <path d="M565 515C565 595 340 612 286 530" fill="none" stroke="#ec9b31" stroke-width="3" marker-end="url(#arrow-white)"/>
+        </svg>
+        <figcaption>The architecture that emerged: named cells own durable control state; model and tool compute remain replaceable capabilities outside the cell.</figcaption>
+      </figure>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Report contents">
+      <strong class="toc-brand">Protein overview</strong>
+      <ol>
+        <li><a href="#learnings" data-index="01">What we learned</a></li>
+        <li><a href="#evidence" data-index="02">Evidence ledger</a></li>
+        <li><a href="#origin" data-index="03">From Conway to work</a></li>
+        <li><a href="#runtime" data-index="04">Runtime and baseline</a></li>
+        <li><a href="#safety" data-index="05">Safety falsification</a></li>
+        <li><a href="#swarm" data-index="06">Cellular swarm</a></li>
+        <li><a href="#maintenance" data-index="07">Repository maintenance</a></li>
+        <li><a href="#formal" data-index="08">Formal protocol</a></li>
+        <li><a href="#fabric" data-index="09">Compute-fabric cube</a></li>
+        <li><a href="#architecture" data-index="10">Architecture v1</a></li>
+        <li><a href="#boundary" data-index="11">Built vs. unproven</a></li>
+        <li><a href="#next" data-index="12">What comes next</a></li>
+        <li><a href="#sources" data-index="13">Source map</a></li>
+      </ol>
+      <div class="toc-key">
+        <strong>Claim language</strong>
+        <p><span class="status observed">Observed</span> reproduced evidence</p>
+        <p><span class="status decision">Decision</span> chosen architecture</p>
+        <p><span class="status inference">Inference</span> interpretation</p>
+        <p><span class="status open">Open</span> still unproven</p>
+      </div>
+    </nav>
+
+    <main id="main">
+      <section id="learnings">
+        <div class="measure">
+          <div class="section-head">
+            <h2>What we learned</h2>
+            <p>These are the conclusions that survived the whole project, not just one successful run. Each is tied to a measured result, a failed assumption, or an explicit architecture decision.</p>
+          </div>
+
+          <div class="executive">
+            <blockquote>Protein is not an LLM inside a cell. It is a durable identity that can sleep, wake, decide, request the right compute, and preserve the evidence needed to continue safely.</blockquote>
+            <aside>
+              <span class="status inference">Synthesis</span>
+              <p>The project began with a cellular-automaton metaphor. The useful part was locality and emergence. The unhelpful part was pretending that movement or survival rules were meaningful agent work.</p>
+            </aside>
+          </div>
+
+          <div class="lesson-stack">
+            <article class="lesson">
+              <div class="lesson-mark">A</div>
+              <h3>An agent is an identity, not a process, run, or model.</h3>
+              <div class="lesson-body">
+                <span class="status decision">Decision</span>
+                <p>One named cell owns compact private state, runs, events, action intent, receipts, a journal, and one alarm. Activations and model calls are temporary. The identity is designed to outlive them.</p>
+                <div class="lesson-proof"><span>ProteinAgent</span><span>named Durable Object</span><span>restart recovery</span></div>
+              </div>
+            </article>
+            <article class="lesson">
+              <div class="lesson-mark">B</div>
+              <h3>The cell is the durable control plane; heavy compute belongs outside.</h3>
+              <div class="lesson-body">
+                <span class="status observed">Observed</span>
+                <p>Celld provides private SQLite, alarms, HTTP, RPC, and hibernatable WebSockets. It has no useful persistent filesystem, subprocess, browser, or native model service. Repo work, tests, model calls, and sandboxes therefore became external capabilities with durable receipts.</p>
+                <div class="lesson-proof"><span>4 compute tiers</span><span>39 attributable receipts</span><span>27 identities</span></div>
+              </div>
+            </article>
+            <article class="lesson">
+              <div class="lesson-mark">C</div>
+              <h3>Durability stops at the external-effect boundary unless the receiver helps.</h3>
+              <div class="lesson-body">
+                <span class="status observed">Observed</span>
+                <p>Retries and recovery can produce zero, one, or multiple attempts or effects. Stable global operation identity, receiver idempotency, or authoritative reconciliation define the safe boundary. A local “sent” flag does not. Protein does not claim exactly-once execution.</p>
+                <div class="lesson-proof"><span>10 / 13 crash cases</span><span>dual-owner dispatch reproduced</span><span>unsafe unsupported</span></div>
+              </div>
+            </article>
+            <article class="lesson">
+              <div class="lesson-mark">D</div>
+              <h3>Models propose; deterministic evidence decides.</h3>
+              <div class="lesson-body">
+                <span class="status decision">Decision</span>
+                <p>Luna can diagnose, edit, critique, or synthesize a protocol. Public tests, hidden evaluators, Z3, budget policy, and monotonic acceptance decide whether its output advances. A confident review is advice, not authority.</p>
+                <div class="lesson-proof"><span>13 / 13 SMT obligations</span><span>4 hidden-backed repairs</span><span>monotonic acceptance</span></div>
+              </div>
+            </article>
+            <article class="lesson">
+              <div class="lesson-mark">E</div>
+              <h3>Propagation is not collaboration.</h3>
+              <div class="lesson-body">
+                <span class="status observed">Observed</span>
+                <p>The local swarm recorded 306 adoptions but only one directly neighbor-derived verified improvement. It concentrated the search: aggregate final diversity was 43 for local runs versus 142 for isolated runs. Useful interaction must causally route work, add evidence, prevent duplication, expose a conflict, recover an operation, or change an accepted artifact.</p>
+                <div class="lesson-proof"><span>147 vs 270 candidates</span><span>1 causal improvement</span><span>typed relationships</span></div>
+              </div>
+            </article>
+            <article class="lesson">
+              <div class="lesson-mark">F</div>
+              <h3>More agents can cost more and produce less.</h3>
+              <div class="lesson-body">
+                <span class="status observed">Observed</span>
+                <p>In nine valid fixed-quality pairs, isolated cells beat local exchange seven times on Responses-token cost, with two ties. Peer review later won zero of three matched trials and regressed a correct parser. Population size and message count are not performance metrics.</p>
+                <div class="lesson-proof"><span>local +26.5% median tokens</span><span>peer 0W / 1L / 2T</span></div>
+              </div>
+            </article>
+            <article class="lesson">
+              <div class="lesson-mark">G</div>
+              <h3>Negative results and discarded attempts are part of the product.</h3>
+              <div class="lesson-body">
+                <span class="status decision">Decision</span>
+                <p>An ambiguous provider attempt invalidated one preregistered pair even after a clean retry. Three unsafe crash checkpoints failed. A formal preflight rejected the larger cube. Preserving those branches made the architecture more credible and more useful.</p>
+                <div class="lesson-proof"><span>21 attempts retained</span><span>pair 3 invalid</span><span>27-cell formal run rejected</span></div>
+              </div>
+            </article>
+            <article class="lesson">
+              <div class="lesson-mark">H</div>
+              <h3>Scale should reveal a systems property, not decorate a demo.</h3>
+              <div class="lesson-body">
+                <span class="status inference">Inference</span>
+                <p>Z3 solved all nine formal mutations in about 101 ms, so 15 more formal agents would only add orchestration volume. The later 27-cell cube was worthwhile for a different reason: it exercised durable heterogeneous compute, recovery, conflict, provenance, and hibernation across many identities.</p>
+                <div class="lesson-proof"><span>Z3 9 / 9</span><span>cube gate said stop</span><span>fabric gate said proceed</span></div>
+              </div>
+            </article>
+            <article class="lesson">
+              <div class="lesson-mark">I</div>
+              <h3>A framework must be extracted from repeated evidence, not imagined in advance.</h3>
+              <div class="lesson-body">
+                <span class="status decision">Decision</span>
+                <p>The durable runtime, acceptance rule, capability receipts, operation identity, artifacts, and evidence vocabulary recur across environments. Grids, cubes, generations, roles, scoring, and seeded workloads remain application or experiment code.</p>
+                <div class="lesson-proof"><span>runtime core</span><span>emerging protocols</span><span>experiment-specific topology</span></div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="evidence" class="tinted">
+        <div class="measure">
+          <div class="section-head">
+            <h2>The evidence ledger</h2>
+            <p>Seven proof stages moved the project from a product thesis to Architecture v1. The table keeps the headline outcome and the limitation together. Use the filters to inspect a claim type; all rows are visible without JavaScript.</p>
+          </div>
+
+          <div class="filter-bar" role="group" aria-label="Filter evidence ledger">
+            <button type="button" data-filter="all" aria-pressed="true">All evidence</button>
+            <button type="button" data-filter="runtime" aria-pressed="false">Runtime</button>
+            <button type="button" data-filter="agents" aria-pressed="false">Agent work</button>
+            <button type="button" data-filter="formal" aria-pressed="false">Formal</button>
+            <button type="button" data-filter="fabric" aria-pressed="false">Fabric</button>
+          </div>
+
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Scrollable Protein project evidence ledger">
+            <table aria-label="Protein project evidence ledger">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Proof stage</th>
+                  <th>Headline evidence</th>
+                  <th>What changed</th>
+                  <th>Honest boundary</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-kind="runtime">
+                  <td class="mono">09 AUG</td>
+                  <td><strong>Celld baseline</strong><small>Cloudflare probe + minimal RepoAgent</small></td>
+                  <td><span class="metric">1,000 / 1,000</span><small>activations in 19.46 s; 3,459 MiB peak RSS</small></td>
+                  <td>Rejected the 1.7 MB full SDK base and kept a minimal celld-native runtime.</td>
+                  <td>One local host and MinIO; development evidence, not a capacity SLA.</td>
+                </tr>
+                <tr data-kind="runtime">
+                  <td class="mono">09 AUG</td>
+                  <td><strong>Crash + ownership proofs</strong><small>13 SIGKILL cases; two-node partition/skew</small></td>
+                  <td><span class="metric">10 / 13</span><small>crash cases passed; dual dispatch reproduced</small></td>
+                  <td>Made idempotency or reconciliation mandatory; rejected automatic unsafe effects.</td>
+                  <td>Celld 0.1.0 failed the tested partition/skew scenario; multi-host single-owner safety is unsupported.</td>
+                </tr>
+                <tr data-kind="agents">
+                  <td class="mono">09 AUG</td>
+                  <td><strong>Fixed-quality Luna swarm</strong><small>10 planned 4×4 matched pairs</small></td>
+                  <td><span class="metric">7–0–2</span><small>isolated wins, local wins, ties across 9 valid pairs</small></td>
+                  <td>Communication cost and causal contribution became first-class metrics.</td>
+                  <td>One invalid pair makes the preregistered confirmatory result incomplete.</td>
+                </tr>
+                <tr data-kind="agents">
+                  <td class="mono">10 AUG</td>
+                  <td><strong>Repository maintenance</strong><small>peer review versus self review</small></td>
+                  <td><span class="metric">0–1–2</span><small>peer wins, losses, ties; 82/84 vs 84/84 cases</small></td>
+                  <td>Extracted monotonic acceptance: a revision cannot erase passing evidence.</td>
+                  <td>Four synthetic tasks and three paired trials; not a general review verdict.</td>
+                </tr>
+                <tr data-kind="formal">
+                  <td class="mono">10 AUG</td>
+                  <td><strong>Formal protocol swarm</strong><small>2×2×3 Luna + Z3 population</small></td>
+                  <td><span class="metric">13 / 13</span><small>UNSAT proof obligations replayed</small></td>
+                  <td>Demonstrated model proposal under solver authority and conformance to the known runtime boundary.</td>
+                  <td>Finite-state model only; no total TypeScript refinement or swarm advantage.</td>
+                </tr>
+                <tr data-kind="formal">
+                  <td class="mono">10 AUG</td>
+                  <td><strong>Formal cube preflight</strong><small>no 27-cell formal execution</small></td>
+                  <td><span class="metric">9 / 9 in 101 ms</span><small>Z3 enumeration; zero model calls</small></td>
+                  <td>Introduced a scale gate: do not add agents when coordination is unnecessary.</td>
+                  <td>The live comparison was one centralized cell versus 12 layered cells.</td>
+                </tr>
+                <tr data-kind="fabric">
+                  <td class="mono">11 AUG</td>
+                  <td><strong>Compute-fabric cube</strong><small>3×3×3, four execution tiers</small></td>
+                  <td><span class="metric">39 receipts</span><small>38 completed, 1 denied; 27 identities; 41 relationships</small></td>
+                  <td>Validated durable heterogeneous capability plumbing and artifact lineage.</td>
+                  <td>Runner selected cells and tiers; one host; not autonomous routing or horizontal scale.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="chart-grid">
+            <figure class="chart-shell" tabindex="0" aria-label="Scrollable matched-pair token-cost chart">
+              <h3>Local exchange cost at first verified target</h3>
+              <p>Nine valid matched pairs. Positive means the local-neighbor condition used more Responses tokens than isolated cells.</p>
+              <svg viewBox="0 0 820 430" role="img" aria-labelledby="cost-chart-title cost-chart-desc">
+                <title id="cost-chart-title">Local versus isolated token-cost delta across nine pairs</title>
+                <desc id="cost-chart-desc">Seven bars show local exchange using between 12.6 and 98.22 percent more tokens, while pair one is within the tie band at 2.22 percent and pair seven is within the tie band at negative 1.37 percent.</desc>
+                <rect x="117" y="34" width="47" height="346" fill="#f8ead8"/>
+                <text x="140" y="21" text-anchor="middle" fill="#72502b" font-family="ui-monospace, monospace" font-size="11">±5% TIE BAND</text>
+                <g stroke="#d7dce5" stroke-width="1">
+                  <line x1="140" y1="34" x2="140" y2="380"/>
+                  <line x1="280" y1="34" x2="280" y2="380"/>
+                  <line x1="420" y1="34" x2="420" y2="380"/>
+                  <line x1="560" y1="34" x2="560" y2="380"/>
+                  <line x1="700" y1="34" x2="700" y2="380"/>
+                </g>
+                <g fill="#596275" font-family="ui-monospace, monospace" font-size="11">
+                  <text x="140" y="402" text-anchor="middle">0%</text>
+                  <text x="280" y="402" text-anchor="middle">25%</text>
+                  <text x="420" y="402" text-anchor="middle">50%</text>
+                  <text x="560" y="402" text-anchor="middle">75%</text>
+                  <text x="700" y="402" text-anchor="middle">100%</text>
+                </g>
+                <g font-family="ui-sans-serif, sans-serif" font-size="12">
+                  <text x="16" y="63" fill="#263044">PAIR 1</text>
+                  <rect x="140" y="47" width="12" height="20" rx="3" fill="#d77c21"/><text x="160" y="62" fill="#596275">+2.22%</text>
+                  <text x="16" y="101" fill="#263044">PAIR 2</text>
+                  <rect x="140" y="85" width="148" height="20" rx="3" fill="#d77c21"/><text x="296" y="100" fill="#596275">+26.50%</text>
+                  <text x="16" y="139" fill="#263044">PAIR 4</text>
+                  <rect x="140" y="123" width="80" height="20" rx="3" fill="#d77c21"/><text x="228" y="138" fill="#596275">+14.24%</text>
+                  <text x="16" y="177" fill="#263044">PAIR 5</text>
+                  <rect x="140" y="161" width="420" height="20" rx="3" fill="#d77c21"/><text x="568" y="176" fill="#596275">+74.95%</text>
+                  <text x="16" y="215" fill="#263044">PAIR 6</text>
+                  <rect x="140" y="199" width="550" height="20" rx="3" fill="#d77c21"/><text x="698" y="214" fill="#596275">+98.22%</text>
+                  <text x="16" y="253" fill="#263044">PAIR 7</text>
+                  <rect x="132" y="237" width="8" height="20" rx="3" fill="#2f9068"/><text x="151" y="252" fill="#596275">−1.37%</text>
+                  <text x="16" y="291" fill="#263044">PAIR 8</text>
+                  <rect x="140" y="275" width="71" height="20" rx="3" fill="#d77c21"/><text x="219" y="290" fill="#596275">+12.60%</text>
+                  <text x="16" y="329" fill="#263044">PAIR 9</text>
+                  <rect x="140" y="313" width="181" height="20" rx="3" fill="#d77c21"/><text x="329" y="328" fill="#596275">+32.35%</text>
+                  <text x="16" y="367" fill="#263044">PAIR 10</text>
+                  <rect x="140" y="351" width="261" height="20" rx="3" fill="#d77c21"/><text x="409" y="366" fill="#596275">+46.67%</text>
+                </g>
+              </svg>
+              <figcaption>Pair 3 is absent because retained attempt history made it invalid. Median local delta: +26.50%. This is descriptive evidence for the nine valid pairs, not a restored confirmatory claim.</figcaption>
+            </figure>
+
+            <aside class="evidence-note">
+              <div>
+                <span class="status open">Important limit</span>
+                <p><strong>We still have no completed equal-budget sequential-agent versus population comparison.</strong></p>
+                <p>The experiments compare local versus isolated populations, peer versus self review, or centralized versus layered formal work. The compute-fabric cube is a systems proof, not an intelligence leaderboard.</p>
+              </div>
+              <span class="mono">EVIDENCE ≠ GENERALIZATION</span>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <section id="origin">
+        <div class="measure">
+          <div class="section-head">
+            <h2>From Conway to useful work</h2>
+            <p>The project did not begin with the final architecture. It began with a cellular metaphor, hit two unhelpful extremes, and then found a sharper question: what happens when many durable agents do real, bounded, verifiable work near one another?</p>
+          </div>
+
+          <div class="chapter-list">
+            <article class="chapter">
+              <div class="chapter-number">00</div>
+              <div class="chapter-copy">
+                <h3>Keep locality. Throw away pretend movement.</h3>
+                <p class="date">ORIGINAL CONVERSATION · 08 AUG 2026</p>
+                <p>The first idea borrowed the shape of Conway’s Game of Life: many cells, simple local visibility, and system-level patterns emerging from local behavior. An early proposal used LLM choices as cellular movement or survival. That was rejected as a misuse of intelligence. A later correction drifted too far toward generic business workflow. That was rejected too.</p>
+                <p>The useful middle was concrete: <strong>each cell holds a persistent problem-solving identity and a candidate artifact; agents explore, test, challenge, combine, review, or adopt real work using bounded model and tool calls.</strong> The grid constrains information. It is not a cartoon world.</p>
+                <ul>
+                  <li>“Death” belongs to a bad candidate, not to the durable agent identity.</li>
+                  <li>Fitness must come from tests or independent evaluation, not an agent’s self-report.</li>
+                  <li>The visualization should show work, lineage, evidence, cost, and recovery. Random motion tells us nothing.</li>
+                </ul>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status decision">Project direction</span>
+                <div class="result">
+                  <strong>Real artifacts became the unit of progress.</strong>
+                  <span>Code, tests, counterexamples, patches, proof certificates, and receipts replaced simulated movement.</span>
+                </div>
+              </aside>
+            </article>
+
+            <article class="chapter risk-chapter">
+              <div class="chapter-number">01</div>
+              <div class="chapter-copy">
+                <h3>A broad use-case list did not prove a product.</h3>
+                <p class="date">PRODUCT RESET · 09 AUG 2026</p>
+                <p>A hundred possible use cases showed that many jobs can be represented as sleeping state machines. It did not show why anyone would deploy celld or Protein. The initial “one goal, one bounded step, mostly waiting” case-shepherd abstraction had overfit one harness into the core.</p>
+                <p>The demand filter became stricter: <strong>would the embedding product need a fleet of independently addressed, long-lived identities with private state, schedules, live sessions, and recovery?</strong> If not, cron plus a database, an ordinary process, a workflow engine, or another actor platform is probably the better answer.</p>
+                <ul>
+                  <li>Cron plus a shared database wins for a small fixed set of jobs.</li>
+                  <li>A normal process wins continuous library-heavy or artifact-heavy work.</li>
+                  <li>Temporal is stronger for finite workflows with mature signals, retries, and compensation.</li>
+                  <li>Restate and Rivet already cover much of the keyed durable-actor territory.</li>
+                </ul>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status observed">Negative finding</span>
+                <div class="result">
+                  <strong>Representable is not deployable.</strong>
+                  <span>The product wedge narrowed to embedded fleets of independently addressed agent identities.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/IDEA.md">Read the product thesis</a></p>
+              </aside>
+            </article>
+
+            <article class="chapter">
+              <div class="chapter-number">02</div>
+              <div class="chapter-copy">
+                <h3>Reset the primitive around identity.</h3>
+                <p class="date">AGENT CELL THESIS · 09 AUG 2026</p>
+                <p>The native unit became one named Agent Cell: a durable control-plane actor that receives events, reconciles compact private state, commits action intent, records outcomes, and may become non-resident when celld evicts an eligible idle isolate. One agent can contain many sequential or overlapping runs; a run is not the identity.</p>
+                <p>This also set the future-framework rule. Protein would be a proving ground, but reusable code would be extracted only when multiple working environments earned the same abstraction. <strong>Runtime semantics stay below the line; grids, generations, roles, scoring, and experiment choreography stay above it.</strong></p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status decision">Core primitive</span>
+                <div class="result">
+                  <strong>Agent ≠ run ≠ model.</strong>
+                  <span>The durable name and private state survive temporary activation and replaceable intelligence providers.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/AGENTS.md">Project vision</a> · <a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/LOG.md">Decision log</a></p>
+              </aside>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="runtime" class="tinted">
+        <div class="measure">
+          <div class="section-head">
+            <h2>Probe the substrate, then build the minimum</h2>
+            <p>Before inventing an agent framework, we read celld’s boundary, ran Cloudflare Agents on it, forced the convenient implementation to fail, and then built only the durable semantics the experiments required.</p>
+          </div>
+
+          <div class="chapter-list">
+            <article class="chapter">
+              <div class="chapter-number">03</div>
+              <div class="chapter-copy">
+                <h3>Celld dictated a control-plane/data-plane split.</h3>
+                <p class="date">SUBSTRATE AUDIT · 09 AUG 2026</p>
+                <p>Celld gives every named cell a private SQLite database, one alarm, HTTP and RPC handling, hibernatable inbound WebSockets, and bucket-backed restoration. Handlers are single-threaded but can interleave while awaiting. It does not provide a functional persistent filesystem, subprocesses, general TCP, a queue service, a workflow service, browser automation, a blob binding, or native AI.</p>
+                <p>That absence was productive. The cell should own <strong>identity, policy, compact state, action intent, leases, receipts, and history</strong>. External capability providers should own model inference, checkouts, shell commands, browsers, evaluators, sandboxes, and large artifacts.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status observed">Substrate facts</span>
+                <div class="result">
+                  <strong>Small durable brain, replaceable hands.</strong>
+                  <span>The boundary later supported model, bounded-evaluator, and Linux capability tiers without changing the cell primitive.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/NOTES.md">Research notes</a></p>
+              </aside>
+            </article>
+
+            <article class="chapter risk-chapter">
+              <div class="chapter-number">04</div>
+              <div class="chapter-copy">
+                <h3>The compatibility probe worked until its assumptions mattered.</h3>
+                <p class="date">CLOUDFLARE AGENTS 0.20.1 + CELLD 0.1.0 · 09 AUG 2026</p>
+                <p>After an esbuild workaround for a bare <code>path</code> import, Cloudflare Agents state, direct SQL, schedules, hibernatable WebSockets, alarm-backed callbacks, and fresh-node restart recovery all ran on celld. That made the SDK valuable prior art, but not a drop-in base.</p>
+                <p>The first RepoAgent committed an action claim and then stayed stuck in <code>delivering</code>. The SDK’s <code>queue()</code> launched its flush without binding the awaited outbound work to the event lifetime; celld ended the handler and abandoned the pending request. Protein therefore took ownership of an alarm-backed durable inbox and outbox.</p>
+                <p>A more decisive failure followed. The prebundled SDK was about 1.7 MB. A 1,000-cell activation attempt reached roughly 9.9 GB RSS on an 11.7 GiB host and timed out under pressure. The fleet premise and the heavyweight base class were incompatible.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status observed">Falsified path</span>
+                <div class="result">
+                  <strong>State: pass. Queue durability: fail. Fleet footprint: poor.</strong>
+                  <span>Compatibility at the API surface did not imply suitable lifecycle or density behavior.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/COMPATIBILITY.md">Compatibility matrix</a></p>
+              </aside>
+            </article>
+
+            <article class="chapter">
+              <div class="chapter-number">05</div>
+              <div class="chapter-copy">
+                <h3>Build ProteinAgent directly on DurableObject.</h3>
+                <p class="date">MINIMAL RUNTIME + REPOAGENT · 09 AUG 2026</p>
+                <p>The replacement runtime implemented only the parts that had to survive activation boundaries: canonical state, deduplicated events, runs, durable action intent, leases, terminal receipts, a bounded journal, one-alarm reconciliation, and hibernatable sockets. Applications return an <code>AgentTransition</code> describing state, run changes, and external action intent; the runtime commits that intent before dispatch.</p>
+                <p>The RepoAgent example made the separation concrete. Its cell remembers repository goals and run state. An external idempotent executor owns checkout, shell, tests, and patch artifacts. A restart while an action was in flight recovered by stable identity rather than repeating a second logical job.</p>
+                <p>The measured minimal baseline activated <strong>1,000 of 1,000 named cells in 19.46 seconds</strong> with 3,459 MiB peak celld RSS. The bundle measured for that run was 34.2 KB; the later reconciliation build is 40.0 KB and has only been regression-tested at 100 cells.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status observed">Local baseline</span>
+                <div class="result">
+                  <strong>~50× smaller bundle than the SDK prototype.</strong>
+                  <span>Local MinIO, four CPU cores, one host. These are development measurements, not production capacity guarantees.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/RUNTIME.md">Runtime contract</a> · <a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/BENCHMARKS.md">Measurements</a></p>
+              </aside>
+            </article>
+          </div>
+
+          <div class="callout">
+            <p>At this point Protein could survive restarts and coordinate external work. The next job was not adding features. It was trying to break the safety story.</p>
+            <small>THE PROJECT MOVED FROM “DOES IT RUN?” TO “WHAT CAN IT HONESTLY GUARANTEE?”</small>
+          </div>
+        </div>
+      </section>
+
+      <section id="safety">
+        <div class="measure">
+          <div class="section-head">
+            <h2>Falsify the safety boundary</h2>
+            <p>Durable execution is defined by what happens at the worst moment. We killed the process at thirteen action checkpoints, then introduced a second owner, a partition, and adversarial clock skew.</p>
+          </div>
+
+          <div class="chapter-list">
+            <article class="chapter risk-chapter">
+              <div class="chapter-number">06</div>
+              <div class="chapter-copy">
+                <h3>Crash every side of dispatch.</h3>
+                <p class="date">13-CASE SIGKILL MATRIX · 09 AUG 2026</p>
+                <p>The proof harness added persistent dispatch markers, revision claims, deterministic checkpoints, an executor ledger, and authoritative reconciliation. It killed celld before claim, after claim, around dispatch, after receiver acceptance, and after local outcome commit.</p>
+                <p><strong>Ten of thirteen cases passed.</strong> All tested idempotent cases converged to one logical remote job. The reconcilable case looked up prior acceptance and avoided redispatch. Three unsafe cases failed at <code>action.dispatch_started</code> and two later checkpoints because a fresh celld process could restore bucket state older than the local marker or receipt.</p>
+                <p>Even a locally committed outcome can be redelivered after restoration. A local “sent” bit is therefore not a stable external guarantee. Leases are recovery clocks, not locks, cancellation, or proof that an earlier request stopped.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status observed">10 pass / 3 fail</span>
+                <div class="result">
+                  <strong>Idempotent and reconciled paths converged.</strong>
+                  <span>Unsafe automatic effects did not. They remain descriptive records, not a supported delivery class.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/PROOFS.md">Crash proof details</a></p>
+              </aside>
+            </article>
+
+            <article class="chapter risk-chapter">
+              <div class="chapter-number">07</div>
+              <div class="chapter-copy">
+                <h3>Split ownership, then watch both sides dispatch.</h3>
+                <p class="date">TWO-NODE PARTITION + 9 S CLOCK OFFSET / 12 S LEASE · 09 AUG 2026</p>
+                <p>The healthy-routing and immediate-partition phases behaved as expected. In the stale-owner window, node B’s clock was moved forward by nine seconds against a twelve-second lease while node A remained partitioned. Both believed they had authority and both reached executor dispatch for the same logical action.</p>
+                <p>The receiver saw two origins and two requests but collapsed them into one logical job because it honored stable idempotency. After healing, a fresh owner converged to the completed state. The test was deliberately adversarial; it does not claim ordinary NTP drift looks like this. It does prove that Protein’s local revision fence cannot repair two simultaneously authoritative celld owners.</p>
+                <p>A later architecture audit found another seam: current action IDs are only unique inside a cell, while the runtime passes the raw local ID as the idempotency key. Shared executors need a globally namespaced operation identity derived from <strong>deployment / cell class / cell identity / local action ID</strong>. Architecture v1 specifies it; runtime enforcement is still open.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status open">Production blocker</span>
+                <div class="result">
+                  <strong>No exactly-once claim. No high-stakes unsafe effects.</strong>
+                  <span>Multi-host one-writer safety requires celld fencing and a rerun of this proof. Receiver semantics remain mandatory even then.</span>
+                </div>
+              </aside>
+            </article>
+          </div>
+
+          <div class="split-boundary" style="margin-top:3rem">
+            <div>
+              <h3>What the runtime can protect</h3>
+              <ul>
+                <li>Durable event deduplication and payload-conflict detection inside one cell history.</li>
+                <li>Committed action intent before external dispatch.</li>
+                <li>Lease-based recovery of abandoned actions.</li>
+                <li>Revision fencing against stale asynchronous commits in one owner history.</li>
+                <li>Reconciliation with an authoritative receiver.</li>
+              </ul>
+            </div>
+            <div>
+              <h3>What it cannot manufacture</h3>
+              <ul>
+                <li>Exactly-once external execution.</li>
+                <li>Idempotency at a non-idempotent receiver.</li>
+                <li>Cancellation of a live call merely because a lease expired.</li>
+                <li>Fencing between two active celld owners.</li>
+                <li>Durability stronger than the substrate’s acknowledged restore point.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="swarm" class="tinted">
+        <div class="measure">
+          <div class="section-head">
+            <h2>Make model agents do real work</h2>
+            <p>The runtime was ready before the research question was. We climbed an evidence ladder: authored interface, deterministic smoke, live Responses tool loops, exploratory comparison, then a frozen fixed-quality experiment. Each rung answered a different question.</p>
+          </div>
+
+          <div class="chapter-list">
+            <article class="chapter risk-chapter">
+              <div class="chapter-number">08</div>
+              <div class="chapter-copy">
+                <h3>First, distinguish the picture from the system.</h3>
+                <p class="date">AUTHORED BROWSER SCENARIO · 09 AUG 2026</p>
+                <p>The first cellular screen made the interaction model visible: a grid of candidates, score, lineage, activity, and per-cell history. It was useful for defining the product language, but it did not run Protein, celld, an LLM, a tool executor, or hidden evaluation.</p>
+                <p>That distinction matters because agent demos often turn presentation into evidence. Here, the UI was a contract preview only. It showed what future receipts and journals should project. Those records did not exist yet.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status observed">Presentation only</span>
+                <div class="result">
+                  <strong>No runtime claim.</strong>
+                  <span>The authored scenario was retained as design work, then superseded by real evidence bundles.</span>
+                </div>
+              </aside>
+            </article>
+
+            <article class="chapter">
+              <div class="chapter-number">09</div>
+              <div class="chapter-copy">
+                <h3>Use a deterministic 4×4 smoke to prove the path.</h3>
+                <p class="date">16 CELLS × 3 GENERATIONS · 09 AUG 2026</p>
+                <p>The next version ran real SwarmCell identities through celld. A deterministic policy generated actions, recorded candidate lineage, evaluated artifacts, restarted the runtime, and reconstructed the final board from durable state and action records.</p>
+                <p>This established that many cells could traverse the same event → action → receipt loop and that a dashboard could be projected from authoritative records. It still proved no autonomy or intelligence. The deterministic behavior was scaffolding for runtime, evidence, and visualization. It was not a benchmark.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status observed">Runtime smoke</span>
+                <div class="result">
+                  <strong>Real cells, scripted decisions.</strong>
+                  <span>Useful for plumbing and replay; deliberately excluded from model-quality claims.</span>
+                </div>
+              </aside>
+            </article>
+
+            <article class="chapter">
+              <div class="chapter-number">10</div>
+              <div class="chapter-copy">
+                <h3>Connect bounded OpenAI Responses tool loops.</h3>
+                <p class="date">LIVE 2×2 VERTICAL SLICE · 09 AUG 2026</p>
+                <p>Four autonomous Protein cells used the OpenAI Responses API to inspect a bounded code-optimization task, call public-check tools, generate artifacts, submit them to a separate hidden evaluator, and persist each cell’s action, outcome, and final-state chain through celld. External services and files retained raw provider replay state, artifacts, board state, and evaluator evidence. After the initial pilot used <code>gpt-5.6-sol</code>, the live research standardized on <strong><code>gpt-5.6-luna</code></strong>.</p>
+                <p>The observed pilot passed all four hidden correctness gates, survived a restart, and showed complete durable delivery. It was a small integration proof, not an equal-budget comparison and not evidence of learning or a swarm advantage.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status observed">Live vertical</span>
+                <div class="result">
+                  <strong>4 durable identities, 19 model turns, 11 tool executions.</strong>
+                  <span>All four final artifacts passed the hidden correctness gate in the referenced pilot.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/tree/01c78461bcac195107a810e562f06eb116315254/examples/cellular-agent-swarm">Cellular swarm implementation</a></p>
+              </aside>
+            </article>
+
+            <article class="chapter">
+              <div class="chapter-number">11</div>
+              <div class="chapter-copy">
+                <h3>Run the first local-versus-isolated comparison.</h3>
+                <p class="date">THREE EXPLORATORY 4×4 PAIRS · 09 AUG 2026</p>
+                <p>The exploratory comparison produced one local win, one isolated win, and one tie, with a median effect of −1.33 percentage points. The local condition used fewer recorded tokens, turns, tools, evaluations, and less elapsed time, but evaluation counts were unequal and evaluator noise was substantial.</p>
+                <p>No repeatable neighbor-exchange advantage appeared. That result was not strong enough to choose an architecture, but it was strong enough to improve the experiment: fix a verified target, equalize the protocol, freeze the budget, retain all attempts, and measure cost at first target rather than only final score.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status inference">Exploratory only</span>
+                <div class="result">
+                  <strong>1 local win / 1 isolated win / 1 tie.</strong>
+                  <span>The data motivated a better endpoint; it did not establish an advantage.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/cellular-agent-swarm/docs/EXPERIMENT.md">Exploratory result</a></p>
+              </aside>
+            </article>
+
+            <article class="chapter risk-chapter">
+              <div class="chapter-number">12</div>
+              <div class="chapter-copy">
+                <h3>The fixed-quality experiment found expensive context and compressed search.</h3>
+                <p class="date">10 PLANNED MATCHED PAIRS · 4×4 × 4 GENERATIONS · 09 AUG 2026</p>
+                <p>Ten alternating matched pairs compared local-neighbor exchange with isolated cells under the same Luna settings. Pair 3 contained an ambiguous provider attempt and a measurement-block failure. A later clean retry could not erase it under the frozen rules, so the authoritative confirmatory result is <strong>incomplete</strong>.</p>
+                <p>The nine valid pairs still provide descriptive evidence. Both arms reached the target in all nine. Isolated won seven non-tied pairs on Responses-token cost, local won none, and two fell within the ±5% tie band. Local median token cost at first verified reach was 26.50% higher. Local used fewer model requests, tools, public checks, discovery evaluations, and output tokens. Its input-token cost was 30.24% higher.</p>
+                <p>The mechanism spread candidates rather than combining work. Local runs created 147 unique candidates versus 270 isolated, finished with diversity 43 versus 142, and recorded 306 adoptions but only one directly neighbor-derived verified improvement. Across the accepted corpus, 320 cells completed 1,280 cell-generations with 20/20 restart recoveries. The runs emitted 7,714 known <code>peer-owner-unreachable</code> warnings, but no redeliveries, runtime or service errors, or HTTP 5xx responses.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status observed">Incomplete experiment</span>
+                <div class="result">
+                  <strong>Communication cost is algorithmic.</strong>
+                  <span>Compact artifact references and causal contribution measures became requirements for the next environment.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/cellular-agent-swarm/docs/COST-TO-TARGET-RESULT.md">Full fixed-quality result</a></p>
+              </aside>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="maintenance">
+        <div class="measure">
+          <div class="section-head">
+            <h2>Turn exchange into repository work</h2>
+            <p>The next environment replaced candidate propagation with code authorship, typed review, revision, public checks, hidden tests, and accepted artifacts. It produced a stronger demo and a more useful failure.</p>
+          </div>
+
+          <div class="chapter-list">
+            <article class="chapter">
+              <div class="chapter-number">13</div>
+              <div class="chapter-copy">
+                <h3>Four cells authored, reviewed, and revised code.</h3>
+                <p class="date">REPOSITORY-MAINTENANCE PILOT · 10 AUG 2026</p>
+                <p>Four Luna-backed Protein cells each repaired one JavaScript task: Unicode slug normalization, case-insensitive HTTP header merging, duration parsing, and capped exponential retry delay. Each cell reviewed its clockwise neighbor, revised its own artifact from a typed review, and submitted to a separate hidden evaluator.</p>
+                <p>Generated code ran inside networkless, read-only, capability-dropped Docker sandboxes. The pilot recorded 12 model jobs, 9,751 Responses tokens, four peer reviews, 4/4 public gates, 4/4 hidden gates, and 2.28-second celld restart recovery. All final revisions passed 28 combined public and hidden cases.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status observed">Vertical passed</span>
+                <div class="result">
+                  <strong>Real patches with independent acceptance.</strong>
+                  <span>This proved bounded collaborative work and durable provenance, not that peer review helped.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/repo-maintenance-swarm/RESULT.md">Pilot result</a></p>
+              </aside>
+            </article>
+
+            <article class="chapter risk-chapter">
+              <div class="chapter-number">14</div>
+              <div class="chapter-copy">
+                <h3>Equal-budget peer review regressed a correct artifact.</h3>
+                <p class="date">THREE MATCHED PEER-VS-SELF PAIRS · 10 AUG 2026</p>
+                <p>Each arm used four durable cells, three Luna calls per cell, the same tasks, the same checks, and alternating condition order. Peer review won zero trials, lost one, and tied two. Peer finished at 82/84 aggregate cases versus self review at 84/84, despite nearly equal actual token use: 29,587 versus 29,973.</p>
+                <p>All 24 initial implementations across both conditions already passed every case. In peer trial 1, a reviewer suggested exact decimal arithmetic for hypothetical precision cases. The author replaced a correct duration parser with a more complicated revision that failed public <code>1.5m</code> and hidden <code>1h</code> cases. The workflow recorded the failed evidence but still let the child replace its verified parent.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status observed">0 wins / 1 loss / 2 ties</span>
+                <div class="result">
+                  <strong>Review created confidence, not evidence.</strong>
+                  <span>The missing primitive was safe promotion, not another communication channel.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/repo-maintenance-swarm/PEER-REVIEW-COMPARISON.md">Comparison result</a></p>
+              </aside>
+            </article>
+
+            <article class="chapter">
+              <div class="chapter-number">15</div>
+              <div class="chapter-copy">
+                <h3>Extract monotonic acceptance.</h3>
+                <p class="date">FIRST EARNED GOVERNANCE PRIMITIVE · 10 AUG 2026</p>
+                <p>The regression exposed a rule that applied beyond repository maintenance. A child artifact may replace a verified parent only when it names that parent, preserves every gate the parent already passed, and passes all newly required gates. Otherwise the parent remains authoritative and the rejected child stays in the evidence trail.</p>
+                <p>This became the pure <code>decideMonotonicAcceptance()</code> primitive. A subsequent formal-protocol run integrated it and recorded four durable acceptance receipts while preserving all 13 proof obligations. The reusable seam was earned by two environments: revision governance for code and promotion governance for proof candidates.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status decision">Extracted primitive</span>
+                <div class="result">
+                  <strong>Advice may branch history; evidence chooses the head.</strong>
+                  <span>Failed children remain inspectable instead of overwriting the last known-good artifact.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/src/acceptance.ts">Acceptance implementation</a></p>
+              </aside>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="formal" class="tinted">
+        <div class="measure">
+          <div class="section-head">
+            <h2>Put a solver above the models</h2>
+            <p>A mathematical task made authority unambiguous. Luna cells could explore, repair, and critique a protocol, but Z3 alone decided whether the finite-state safety obligations held.</p>
+          </div>
+
+          <div class="chapter-list">
+            <article class="chapter">
+              <div class="chapter-number">16</div>
+              <div class="chapter-copy">
+                <h3>Twelve cells repaired a crash/retry protocol.</h3>
+                <p class="date">2×2×3 FORMAL POPULATION · 10 AUG 2026</p>
+                <p>The population used three responsibility layers: explorers, repair/invariant synthesizers, and adversarial proof checkers. It examined a finite protocol whose unsafe trace could retry an ambiguous effect without reconciliation. All four synthesis columns independently selected <code>require_reconciliation</code>.</p>
+                <p>Z3 proved initiation, transition preservation, four safety implications, and the policy forbidding unreconciled ambiguous retry. The final content-hashed SMT-LIB certificate replayed 13/13 obligations as UNSAT using Z3 4.15.3 and rejected three invalid mutations. The pilot used 12 Luna calls, 13,501 tokens, and recovered after restart in 2.85 seconds.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status observed">13 / 13 obligations</span>
+                <div class="result">
+                  <strong>Model-generated proposals, solver-owned truth.</strong>
+                  <span>The proof applies to the encoded finite-state model, not the entire TypeScript runtime.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/formal-protocol-swarm/RESULT.md">Formal pilot result</a></p>
+              </aside>
+            </article>
+
+            <article class="chapter">
+              <div class="chapter-number">17</div>
+              <div class="chapter-copy">
+                <h3>Project the runtime’s real failures into the proof model.</h3>
+                <p class="date">RUNTIME CONFORMANCE · 10 AUG 2026</p>
+                <p>The operational crash matrix was translated into the formal vocabulary rather than hidden behind the successful synthetic repair. The reconcilable <code>timeout_applied → reconcile_applied</code> trace conformed. Unsafe crashes at dispatch start, receiver request, and receiver acceptance did not. The seeded <code>timeout_applied → retry_ambiguous</code> trace was rejected by both the transition relation and the at-most-once property.</p>
+                <p>This was a valuable non-result: the formal model preserved the known 10/13 production boundary instead of making it disappear. Idempotent scenarios remained outside the proof model because their safety comes from receiver deduplication.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status observed">Conformance boundary</span>
+                <div class="result">
+                  <strong>2 non-idempotent traces conformed; 3 unsafe traces were rejected.</strong>
+                  <span>The proof and implementation evidence agreed on where external reconciliation is mandatory.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/formal-protocol-swarm/CONFORMANCE-RESULT.md">Conformance result</a></p>
+              </aside>
+            </article>
+
+            <article class="chapter risk-chapter">
+              <div class="chapter-number">18</div>
+              <div class="chapter-copy">
+                <h3>Refuse the 27-cell formal cube.</h3>
+                <p class="date">FROZEN SCALE PREFLIGHT · 10 AUG 2026</p>
+                <p>Before spending model calls, the project froze a nine-mutation suite, equal budgets, and explicit reasons that would justify scaling. Exhaustive Z3 enumeration solved 9/9 in 101.168 ms with no model. One centralized Luna cell solved 9/9 with 12 calls. A layered 12-cell Protein population also solved 9/9 with 12 calls.</p>
+                <p>No centralized miss, layered advantage, causally necessary neighbor artifact, cross-column conflict, or solver-cost pressure appeared. The gate therefore said <strong>do not run the larger cube on this task</strong>. Adding fifteen cells would measure orchestration volume, not collective intelligence.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status decision">Scale rejected</span>
+                <div class="result">
+                  <strong>No 27-cell formal execution occurred.</strong>
+                  <span>This stop decision became evidence that Protein’s experiment gates could constrain its own ambition.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/formal-protocol-swarm/CUBE-PREFLIGHT-RESULT.md">Preflight result</a></p>
+              </aside>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="fabric">
+        <div class="measure">
+          <div class="section-head">
+            <h2>Correct the cube thesis</h2>
+            <p>The formal task rejected a bigger population as an intelligence experiment. It did not reject a cube as a systems experiment. The sharper vision was a durable agentic compute fabric: many lightweight identities, selective stronger compute, durable provenance, and recovery over time.</p>
+          </div>
+
+          <div class="chapter-list">
+            <article class="chapter">
+              <div class="chapter-number">19</div>
+              <div class="chapter-copy">
+                <h3>Ask a systems question, not only a benchmark question.</h3>
+                <p class="date">CORRECTED THESIS · 11 AUG 2026</p>
+                <p>The project’s long-term premise is not merely “many agents beat one.” Most future agents may need only a small durable cell for identity, local memory, work claims, schedules, relationships, and provenance. Some tasks need a bounded model call. Others need a narrow evaluator or a full Linux sandbox. The stronger resource should be requested when needed and its outcome returned as a durable receipt.</p>
+                <p>The resulting question became: <strong>can a large population of durable agents coordinate heterogeneous, escalating compute reliably and economically over time?</strong> A worthwhile cube would make wakes, handoffs, duplicate suppression, conflict, denial, recovery, provenance, and hibernation visible. Population size alone would prove nothing about intelligence.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status decision">Broader systems thesis</span>
+                <div class="result">
+                  <strong>Durable cells → selective compute → durable evidence.</strong>
+                  <span>The cube now had a reason to exist even without outperforming a centralized agent.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/NOTES.md">Corrected thesis note</a></p>
+              </aside>
+            </article>
+
+            <article class="chapter">
+              <div class="chapter-number">20</div>
+              <div class="chapter-copy">
+                <h3>Build a frozen 3×3×3 repository-operations fabric.</h3>
+                <p class="date">27 IDENTITIES · 12 WORK ITEMS · 4 TIERS · 11 AUG 2026</p>
+                <p>Nine domains were crossed with three responsibilities: observe/triage, investigate/execute, and verify/govern. A frozen finite workload included defects, duplicates, policy denials, hidden checks, and patches that could conflict. Four capability tiers represented escalating cost: cell-local policy, one bounded Luna call, a fixed evaluator, and an isolated Linux sandbox.</p>
+                <p>The runner emitted an asynchronous work graph: observation, claim, diagnosis, capability request, artifact, evaluation, integration, and acceptance. Observed relationship types included <code>duplicate</code>, <code>blocked_by</code>, <code>conflicts_with</code>, <code>handoff</code>, <code>evaluates</code>, and <code>retries_after</code>. The run also scheduled a celld restart with five sandbox actions outstanding, an equivalent duplicate request, one bounded-tier denial, a disposable container termination, a same-file candidate conflict, and a forced four-resident hibernation phase.</p>
+                <p>Importantly, the <strong>deterministic runner</strong> selected destination cells, phases, tiers, and most relationships. That made the run reproducible, but it did not prove self-routing, capability discovery, or agent-selected escalation.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status decision">Frozen systems workload</span>
+                <div class="result">
+                  <strong>Adversity was scheduled, not hidden chaos.</strong>
+                  <span>Success criteria and fault points were fixed before the live Luna run.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/NEXT-CUBE.md">Build hypothesis</a></p>
+              </aside>
+            </article>
+
+            <article class="chapter">
+              <div class="chapter-number">21</div>
+              <div class="chapter-copy">
+                <h3>The compute fabric passed, then narrowed its own claim.</h3>
+                <p class="date">RUN compute-fabric-openai-20260811071417338-2078129 · 11 AUG 2026</p>
+                <p>The live run recorded 27 distinct Protein identities, 39 structurally complete receipts (38 completed and one denied), 348 journal records, and 41 typed relationships. Tier use was 17 cell-local, 11 model, six bounded-tier receipts including the denial, and five sandbox receipts. Eleven Luna calls consumed 6,224 tokens. Four accepted repairs passed hidden evaluation.</p>
+                <p>Celld stopped with five sandbox actions outstanding. External executors completed independently; after restart, Protein reconciled their stable action IDs in 7.74 seconds and preserved prior receipts and relationships. One equivalent duplicate request resolved to a cached logical job. One policy denial was recorded and retried. Two different hidden-passing retry patches created a real same-file conflict; a one-call Luna model-tier review selected one and governance cells accepted it through provenance.</p>
+                <p>The hibernation proof required a four-resident cap; idle time alone did not reliably evict cells. The reported sandbox “termination” was also weaker than an executor crash: the executor killed a real but disposable sleeping container, recorded the event, and then ran the actual evaluator. It did not interrupt an in-flight candidate evaluation or produce an independently durable failed-task receipt.</p>
+              </div>
+              <aside class="chapter-evidence">
+                <span class="status observed">All frozen criteria passed</span>
+                <div class="result">
+                  <strong>Heterogeneous work remained attributable, recoverable, budgeted, and replayable.</strong>
+                  <span>One host, finite runner-directed workload. No autonomous routing, continuous operation, or horizontal production claim.</span>
+                </div>
+                <p><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/compute-fabric-cube/RESULT.md">Fabric result</a></p>
+              </aside>
+            </article>
+          </div>
+
+          <div class="chart-grid">
+            <figure class="chart-shell" tabindex="0" aria-label="Scrollable compute-fabric receipt chart">
+              <h3>Where the 39 attributable receipts were recorded</h3>
+              <p>The fabric kept inexpensive work in cells and escalated selected tasks to stronger capability tiers.</p>
+              <svg viewBox="0 0 760 300" role="img" aria-labelledby="tier-chart-title tier-chart-desc">
+                <title id="tier-chart-title">Compute-fabric receipts by execution tier</title>
+                <desc id="tier-chart-desc">Seventeen receipts were cell local, eleven used the Luna model, six belonged to the bounded tier including one denial, and five used a Linux sandbox.</desc>
+                <g font-family="ui-sans-serif, sans-serif">
+                  <text x="20" y="57" fill="#263044" font-size="13" font-weight="700">CELL LOCAL</text>
+                  <rect x="145" y="38" width="510" height="28" rx="5" fill="#1e64b5"/>
+                  <text x="670" y="58" fill="#263044" font-family="ui-monospace, monospace" font-size="14" font-weight="800">17</text>
+                  <text x="20" y="117" fill="#263044" font-size="13" font-weight="700">MODEL</text>
+                  <rect x="145" y="98" width="330" height="28" rx="5" fill="#d77c21"/>
+                  <text x="490" y="118" fill="#263044" font-family="ui-monospace, monospace" font-size="14" font-weight="800">11</text>
+                  <text x="20" y="177" fill="#263044" font-size="13" font-weight="700">BOUNDED</text>
+                  <rect x="145" y="158" width="180" height="28" rx="5" fill="#7654a8"/>
+                  <text x="340" y="178" fill="#263044" font-family="ui-monospace, monospace" font-size="14" font-weight="800">6</text>
+                  <text x="20" y="237" fill="#263044" font-size="13" font-weight="700">LINUX</text>
+                  <rect x="145" y="218" width="150" height="28" rx="5" fill="#2f9068"/>
+                  <text x="310" y="238" fill="#263044" font-family="ui-monospace, monospace" font-size="14" font-weight="800">5</text>
+                </g>
+                <text x="145" y="276" fill="#596275" font-family="ui-monospace, monospace" font-size="11">CHEAP COORDINATION</text>
+                <text x="655" y="276" fill="#596275" text-anchor="end" font-family="ui-monospace, monospace" font-size="11">SELECTIVE ESCALATION</text>
+              </svg>
+              <figcaption>The frozen runner chose the tier. The next architecture proof moves justification and request authorship into the cells while retaining global policy and budget enforcement.</figcaption>
+            </figure>
+
+            <aside class="evidence-note">
+              <div>
+                <span class="status observed">Useful interaction</span>
+                <p><strong>41 typed relationships. Calling them “41 messages” would miss the point.</strong></p>
+                <p>The relationships recorded handoffs, evidence links, duplicate reports, retries, conflicts, resolutions, and acceptance. Stable event/action identity plus executor lookup suppressed duplicate execution.</p>
+              </div>
+              <span class="mono">COUNT CAUSAL WORK, NOT CHATTER</span>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <section id="architecture" class="blue">
+        <div class="measure">
+          <div class="section-head">
+            <h2>The architecture that emerged</h2>
+            <p>Architecture v1 is an evidence-cutoff design, not an immutable endpoint. It separates the substrate, durable runtime, reusable policies, experiment code, external compute, and fleet-wide control so each layer can make only the claims it has earned.</p>
+          </div>
+
+          <figure class="architecture-map" tabindex="0" aria-label="Scrollable Protein Architecture v1 diagram">
+            <svg viewBox="0 0 1120 630" role="img" aria-labelledby="architecture-title architecture-desc">
+              <title id="architecture-title">Protein Architecture v1 layers and responsibility boundary</title>
+              <desc id="architecture-desc">Celld provides named durable objects and storage. Protein runtime provides Agent Cells, events, runs, actions, receipts, and alarms. Pure acceptance and emerging protocols sit above. Applications and experiments specialize behavior. External model, evaluator, sandbox, artifact, and fleet services remain outside the cell.</desc>
+              <defs>
+                <marker id="arch-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                  <path d="M0 0L8 4L0 8Z" fill="#ec9b31"/>
+                </marker>
+              </defs>
+              <rect x="35" y="38" width="650" height="540" rx="15" fill="none" stroke="rgba(255,255,255,.58)" stroke-width="2"/>
+              <text x="60" y="72" fill="#fff" font-family="ui-monospace, monospace" font-size="14" font-weight="700">DURABLE APPLICATION PLANE</text>
+
+              <rect x="65" y="100" width="360" height="92" rx="9" fill="#fff"/>
+              <text x="88" y="134" fill="#172038" font-family="ui-sans-serif, sans-serif" font-size="16" font-weight="750">Applications + populations</text>
+              <text x="88" y="160" fill="#566074" font-family="ui-sans-serif, sans-serif" font-size="12">RepoAgent · SwarmCell · formal roles</text>
+              <text x="88" y="179" fill="#566074" font-family="ui-sans-serif, sans-serif" font-size="12">compute-fabric roles</text>
+
+              <rect x="445" y="100" width="210" height="92" rx="9" fill="#f4e4ce"/>
+              <text x="466" y="132" fill="#172038" font-family="ui-sans-serif, sans-serif" font-size="15" font-weight="750">Experiment harness</text>
+              <text x="466" y="157" fill="#566074" font-family="ui-sans-serif, sans-serif" font-size="11">grids · cubes · generations</text>
+              <text x="466" y="177" fill="#566074" font-family="ui-sans-serif, sans-serif" font-size="11">scoring · seeded workloads</text>
+
+              <rect x="65" y="214" width="285" height="104" rx="9" fill="#dfe9fb"/>
+              <text x="88" y="247" fill="#172038" font-family="ui-sans-serif, sans-serif" font-size="16" font-weight="750">Emerging protocols</text>
+              <text x="88" y="272" fill="#566074" font-family="ui-sans-serif, sans-serif" font-size="12">capability · receipt · artifact</text>
+              <text x="88" y="292" fill="#566074" font-family="ui-sans-serif, sans-serif" font-size="12">operation key · relationships · evidence</text>
+
+              <rect x="370" y="214" width="285" height="104" rx="9" fill="#cceada"/>
+              <text x="393" y="247" fill="#172038" font-family="ui-sans-serif, sans-serif" font-size="16" font-weight="750">Monotonic acceptance</text>
+              <text x="393" y="272" fill="#566074" font-family="ui-sans-serif, sans-serif" font-size="12">lineage + preserved gates</text>
+              <text x="393" y="292" fill="#566074" font-family="ui-sans-serif, sans-serif" font-size="12">pure deterministic promotion policy</text>
+
+              <rect x="65" y="340" width="590" height="116" rx="9" fill="#1f69bd"/>
+              <text x="90" y="374" fill="#fff" font-family="ui-sans-serif, sans-serif" font-size="18" font-weight="800">Protein runtime core</text>
+              <text x="90" y="401" fill="rgba(255,255,255,.82)" font-family="ui-sans-serif, sans-serif" font-size="13">Agent Cell · canonical state · events · runs · durable action intent</text>
+              <text x="90" y="425" fill="rgba(255,255,255,.82)" font-family="ui-sans-serif, sans-serif" font-size="13">leases · reconciliation · receipts · journal · one alarm · WebSockets</text>
+
+              <rect x="65" y="478" width="590" height="72" rx="9" fill="#172038"/>
+              <text x="90" y="508" fill="#fff" font-family="ui-sans-serif, sans-serif" font-size="16" font-weight="750">celld substrate</text>
+              <text x="90" y="532" fill="rgba(255,255,255,.72)" font-family="ui-sans-serif, sans-serif" font-size="12">named Durable Objects · private SQLite · alarms · bucket restore · HTTP/RPC/WebSockets</text>
+
+              <path d="M655 398H756" stroke="#ec9b31" stroke-width="3" marker-end="url(#arch-arrow)"/>
+              <path d="M756 398H725V160H756" fill="none" stroke="rgba(236,155,49,.75)" stroke-width="2" stroke-dasharray="5 7"/>
+
+              <rect x="775" y="76" width="310" height="330" rx="15" fill="#172038" stroke="rgba(255,255,255,.46)"/>
+              <text x="802" y="111" fill="#fff" font-family="ui-monospace, monospace" font-size="14" font-weight="700">EXTERNAL CAPABILITY PLANE</text>
+              <rect x="802" y="138" width="256" height="49" rx="7" fill="#ec9b31"/>
+              <text x="824" y="168" fill="#172038" font-family="ui-sans-serif, sans-serif" font-size="14" font-weight="750">Model gateway</text>
+              <rect x="802" y="201" width="256" height="49" rx="7" fill="#fff"/>
+              <text x="824" y="231" fill="#172038" font-family="ui-sans-serif, sans-serif" font-size="14" font-weight="750">Bounded tools + evaluators</text>
+              <rect x="802" y="264" width="256" height="49" rx="7" fill="#55bc8f"/>
+              <text x="824" y="294" fill="#172038" font-family="ui-sans-serif, sans-serif" font-size="14" font-weight="750">Linux sandboxes + repos</text>
+              <rect x="802" y="327" width="256" height="49" rx="7" fill="#d8cdf0"/>
+              <text x="824" y="357" fill="#172038" font-family="ui-sans-serif, sans-serif" font-size="14" font-weight="750">Artifacts + provenance</text>
+
+              <rect x="775" y="438" width="310" height="112" rx="15" fill="none" stroke="#ec9b31" stroke-width="2" stroke-dasharray="7 7"/>
+              <text x="802" y="472" fill="#fff" font-family="ui-monospace, monospace" font-size="14" font-weight="700">FLEET CONTROL PLANE · OPEN</text>
+              <text x="802" y="501" fill="rgba(255,255,255,.72)" font-family="ui-sans-serif, sans-serif" font-size="12">registry · global queue · admission · quotas</text>
+              <text x="802" y="523" fill="rgba(255,255,255,.72)" font-family="ui-sans-serif, sans-serif" font-size="12">fairness · capacity · deployment · observability</text>
+
+              <text x="65" y="606" fill="rgba(255,255,255,.65)" font-family="ui-monospace, monospace" font-size="11">CELLS RETAIN COMPACT TRUTH; CAPABILITIES RETAIN JOBS; ARTIFACT STORES RETAIN LARGE CONTENT.</text>
+            </svg>
+            <figcaption>The boundary is the architecture: heavyweight, replaceable, or fleet-wide concerns are not smuggled into the durable cell. Dashed fleet services are target architecture, not implemented infrastructure.</figcaption>
+          </figure>
+
+          <div class="definition-grid">
+            <article>
+              <h3><code>Agent Cell</code></h3>
+              <p>One independently named unit of durable memory and authority. It owns compact canonical state and may contain many runs.</p>
+            </article>
+            <article>
+              <h3><code>Run</code></h3>
+              <p>A bounded objective or attempt within an agent identity. Completing or failing a run does not destroy the agent.</p>
+            </article>
+            <article>
+              <h3><code>Event</code></h3>
+              <p>A deduplicated input with identity, payload hash, revision claim, and durable processing outcome.</p>
+            </article>
+            <article>
+              <h3><code>Action intent</code></h3>
+              <p>A committed request for an external effect. The runtime records idempotent, reconcilable, or unsafe; unsafe exists for ambiguity research but is unsupported for automatic production effects.</p>
+            </article>
+            <article>
+              <h3><code>Receipt</code></h3>
+              <p>Durable evidence that a capability accepted, completed, failed, denied, or left an operation ambiguous.</p>
+            </article>
+            <article>
+              <h3><code>Artifact + relationship</code></h3>
+              <p>Versioned work outside the cell plus a typed causal edge such as parent, review, conflict, duplicate, or acceptance.</p>
+            </article>
+          </div>
+
+          <div class="tier-list" aria-label="Protein action lifecycle">
+            <div class="tier">
+              <div class="tier-index">01</div>
+              <h3>Persist and deduplicate the event</h3>
+              <p>Same identity plus same payload becomes one event. Same identity plus conflicting payload is rejected rather than silently merged.</p>
+            </div>
+            <div class="tier">
+              <div class="tier-index">02</div>
+              <h3>Claim a state revision</h3>
+              <p>The cell records which durable revision the transition is based on so stale awaited work cannot overwrite a newer local history.</p>
+            </div>
+            <div class="tier">
+              <div class="tier-index">03</div>
+              <h3>Describe the application transition</h3>
+              <p>Application policy proposes state changes, run changes, journal evidence, and bounded external action intent.</p>
+            </div>
+            <div class="tier">
+              <div class="tier-index">04</div>
+              <h3>Commit state and intent together</h3>
+              <p>The runtime persists the new compact truth and outbox record before any capability receives the request.</p>
+            </div>
+            <div class="tier">
+              <div class="tier-index">05</div>
+              <h3>Reconcile or dispatch</h3>
+              <p>An authoritative lookup comes first where available. The target contract carries stable global operation identity and a bounded lease; today the application must namespace the cell-local action ID.</p>
+            </div>
+            <div class="tier">
+              <div class="tier-index">06</div>
+              <h3>Record outcome, then wake policy again</h3>
+              <p>A terminal receipt becomes a new internal event. The agent decides what follows; an in-memory callback does not.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="boundary">
+        <div class="measure">
+          <div class="section-head">
+            <h2>Built now. Still unproven.</h2>
+            <p>The strongest way to explain Protein is to draw the claim boundary in public. The left side is implemented or reproduced in this repository. The right side remains an architecture target, an unresolved safety issue, or a future experiment.</p>
+          </div>
+
+          <div class="split-boundary">
+            <div>
+              <span class="status observed">Built or reproduced</span>
+              <h3 style="margin-top:1rem">The current evidence base</h3>
+              <ul>
+                <li>A minimal celld-native <code>ProteinAgent</code> with durable events, runs, action intent, receipts, journal, alarm reconciliation, and hibernatable sockets.</li>
+                <li>Idempotent and reconcilable external action paths with deterministic crash checkpoints.</li>
+                <li>RepoAgent, cellular optimization, repository-maintenance, formal-protocol, and compute-fabric environments.</li>
+                <li>Bounded OpenAI Responses tool loops using <code>gpt-5.6-luna</code>.</li>
+                <li>Public checks, hidden evaluators, Docker sandboxes, Z3 certificates, and artifact provenance.</li>
+                <li>Monotonic parent/child acceptance that retains last known-good evidence.</li>
+                <li>Restart reconciliation, equivalent-duplicate suppression, typed relationships, conflict resolution, and resident-pressure hibernation evidence.</li>
+                <li>Machine-readable run summaries, timelines, receipts, logs, and honest negative-result reports.</li>
+              </ul>
+            </div>
+            <div>
+              <span class="status open">Not yet proven</span>
+              <h3 style="margin-top:1rem">The current production boundary</h3>
+              <ul>
+                <li>Celld-level owner fencing and safe multi-host failover under partitions and clock skew.</li>
+                <li>Exactly-once external effects or automatic high-stakes unsafe dispatch.</li>
+                <li>Runtime-enforced global operation namespacing across cells; Architecture v1 defines it, current code still passes a cell-local action ID.</li>
+                <li>Cell-authored compute escalation, capability discovery, decentralized routing, or continuous operation.</li>
+                <li>A real in-flight evaluator or executor-process crash with its own durable failed-attempt receipt.</li>
+                <li>Global queues, admission, quotas, fairness, capacity control, fleet registry, and cross-fleet observability.</li>
+                <li>Cancellation, human approvals, hostile multitenancy, secret brokering, schema migrations, retention, and journal compaction.</li>
+                <li>10,000-cell sparse-fleet behavior, real object-store latency, steady-state cost, or a production SLA.</li>
+                <li>Learning, durable reputation, or an equal-budget population advantage over a strong sequential agent.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="callout">
+            <p>The present claim is substantial but narrow: Protein demonstrates many durable identities coordinating bounded, externally verified work through recoverable capability calls on one celld host.</p>
+            <small>IT DOES NOT YET CLAIM AUTONOMOUS FLEET CONTROL, MULTI-HOST SAFETY, OR SUPERIOR COLLECTIVE INTELLIGENCE.</small>
+          </div>
+        </div>
+      </section>
+
+      <section id="next" class="dark">
+        <div class="measure">
+          <div class="section-head">
+            <h2>The next architecture proof</h2>
+            <p>The next run should not add another decorative topology. It should remove central orchestration in controlled increments and test whether a durable population can operate a real work stream under explicit capability, budget, and evidence constraints.</p>
+          </div>
+
+          <div class="next-list">
+            <article class="next-item">
+              <b>P1</b>
+              <h3>Make cells author capability requests.</h3>
+              <p>Cells should choose the cheapest adequate tier, state why escalation is necessary, name the evidence expected, and bind the request to a budget. Deterministic policy may approve, reduce, deny, or defer it.</p>
+            </article>
+            <article class="next-item">
+              <b>P2</b>
+              <h3>Add discovery and constrained executor pools.</h3>
+              <p>Capabilities should advertise typed limits and current availability. Work should queue durably against bounded model, evaluator, and sandbox capacity so backpressure becomes visible rather than hidden in the runner.</p>
+            </article>
+            <article class="next-item">
+              <b>P3</b>
+              <h3>Enforce global operation identity and fleet policy.</h3>
+              <p>Namespace every external operation by deployment, cell class, cell identity, and local action. Keep global admission, quotas, fairness, and one-logical-effect enforcement outside individual cells.</p>
+            </article>
+            <article class="next-item">
+              <b>P4</b>
+              <h3>Run real failure and longevity proofs.</h3>
+              <p>Interrupt an in-flight evaluator, kill an executor process, retain a failed-attempt receipt, recover queued work, force migration between owners, and repeat the multi-host fencing harness after an upstream celld fix.</p>
+            </article>
+            <article class="next-item">
+              <b>P5</b>
+              <h3>Compare causal work under equal ceilings.</h3>
+              <p>Run a strong sequential agent, isolated population, and interacting population against the same work stream, token ceiling, executor ceiling, and deadline. Attribute accepted outcomes to the interactions that actually changed them.</p>
+            </article>
+          </div>
+
+          <div class="architecture-map" style="margin-top:3rem" tabindex="0" role="region" aria-label="Scrollable next population experiment diagram">
+            <svg viewBox="0 0 1080 290" role="img" aria-labelledby="next-flow-title next-flow-desc">
+              <title id="next-flow-title">Next continuous Protein population experiment</title>
+              <desc id="next-flow-desc">A durable work stream wakes specialized cells. Cells discover capabilities and author budgeted requests. External pools execute them. Independent evaluation and artifact acceptance return evidence. Fleet policy controls fairness and backpressure.</desc>
+              <defs>
+                <marker id="next-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                  <path d="M0 0L8 4L0 8Z" fill="#ec9b31"/>
+                </marker>
+              </defs>
+              <g font-family="ui-sans-serif, sans-serif">
+                <rect x="25" y="74" width="170" height="108" rx="10" fill="#fff"/>
+                <text x="50" y="111" fill="#172038" font-size="16" font-weight="800">Durable work stream</text>
+                <text x="50" y="139" fill="#566074" font-size="12">events · dependencies</text>
+                <text x="50" y="159" fill="#566074" font-size="12">deadlines · evidence needs</text>
+
+                <path d="M195 128H253" stroke="#ec9b31" stroke-width="3" marker-end="url(#next-arrow)"/>
+
+                <rect x="270" y="43" width="230" height="170" rx="10" fill="#1f69bd"/>
+                <text x="297" y="80" fill="#fff" font-size="16" font-weight="800">Durable agent population</text>
+                <text x="297" y="108" fill="rgba(255,255,255,.78)" font-size="12">discover · claim · route · challenge</text>
+                <text x="297" y="130" fill="rgba(255,255,255,.78)" font-size="12">request tier + budget + evidence</text>
+                <text x="297" y="166" fill="#f5b45d" font-family="ui-monospace, monospace" font-size="11">CELL-AUTHORED REQUESTS</text>
+                <text x="297" y="188" fill="#f5b45d" font-family="ui-monospace, monospace" font-size="11">NO GLOBAL LLM PLANNER</text>
+
+                <path d="M500 128H558" stroke="#ec9b31" stroke-width="3" marker-end="url(#next-arrow)"/>
+
+                <rect x="575" y="43" width="210" height="170" rx="10" fill="#55bc8f"/>
+                <text x="602" y="80" fill="#172038" font-size="16" font-weight="800">Capability pools</text>
+                <text x="602" y="108" fill="#31495a" font-size="12">model · evaluator · sandbox</text>
+                <text x="602" y="130" fill="#31495a" font-size="12">bounded concurrency + lookup</text>
+                <text x="602" y="166" fill="#172038" font-family="ui-monospace, monospace" font-size="11">RECEIPTS + ARTIFACTS</text>
+                <text x="602" y="188" fill="#172038" font-family="ui-monospace, monospace" font-size="11">REAL FAILED ATTEMPTS</text>
+
+                <path d="M785 128H843" stroke="#ec9b31" stroke-width="3" marker-end="url(#next-arrow)"/>
+
+                <rect x="860" y="74" width="195" height="108" rx="10" fill="#ec9b31"/>
+                <text x="885" y="111" fill="#172038" font-size="16" font-weight="800">Evidence gate</text>
+                <text x="885" y="139" fill="#31495a" font-size="12">verify · resolve · accept</text>
+                <text x="885" y="159" fill="#31495a" font-size="12">retain failures + lineage</text>
+
+                <path d="M958 182C958 258 385 270 385 215" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="5 7" marker-end="url(#next-arrow)"/>
+                <text x="535" y="263" fill="rgba(255,255,255,.72)" font-family="ui-monospace, monospace" font-size="11">ACCEPTED EVIDENCE CHANGES FUTURE ROUTING; RAW CHAT DOES NOT</text>
+              </g>
+            </svg>
+            <figcaption>Advance only if the population demonstrates useful causal handoffs, bounded backpressure, durable failure accounting, safe recovery, and accepted work under an equal-ceiling baseline.</figcaption>
+          </div>
+        </div>
+      </section>
+
+      <section id="sources">
+        <div class="measure">
+          <div class="section-head">
+            <h2>Source map</h2>
+            <p>This artifact synthesizes the repository’s design notes, runtime contract, proof reports, experiment results, and final architecture. The links below lead to the primary public documents; run IDs in the narrative identify the retained machine evidence.</p>
+          </div>
+
+          <ol class="source-list">
+            <li>
+              <div><strong><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/ARCHITECTURE.md">Protein Architecture v1</a></strong><small>Canonical architecture, status language, guarantees, non-guarantees, evidence table, and next proof.</small></div>
+            </li>
+            <li>
+              <div><strong><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/IDEA.md">Product thesis</a> and <a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/LOG.md">decision log</a></strong><small>Agent Cell reset, demand filter, external-compute boundary, SDK rejection, and safety decisions.</small></div>
+            </li>
+            <li>
+              <div><strong><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/RUNTIME.md">Runtime contract</a></strong><small>Lifecycle, schema, event processing, action processing, alarms, concurrency, sockets, and executor boundary.</small></div>
+            </li>
+            <li>
+              <div><strong><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/COMPATIBILITY.md">Celld and Cloudflare Agents compatibility</a></strong><small>Pinned compatibility results, packaging workaround, detached queue failure, and why Protein does not extend the full SDK.</small></div>
+            </li>
+            <li>
+              <div><strong><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/BENCHMARKS.md">Prototype measurements</a> and <a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/PROOFS.md">safety proofs</a></strong><small>1,000-cell baseline, crash matrix, action semantics, and two-node ownership falsification.</small></div>
+            </li>
+            <li>
+              <div><strong><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/CELLULAR-AGENT-SWARM.md">Cellular swarm concept</a></strong><small>Useful-work interpretation of locality, agent behaviors, evaluation, topology, and framework boundary.</small></div>
+            </li>
+            <li>
+              <div><strong><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/cellular-agent-swarm/docs/COST-TO-TARGET-RESULT.md">Fixed-quality Luna result</a> and <a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/cellular-agent-swarm/docs/LEARNINGS.md">swarm learnings</a></strong><small>Nine valid pairs, incomplete confirmatory result, cost decomposition, diversity, lineage, and evidence-integrity rules.</small></div>
+            </li>
+            <li>
+              <div><strong><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/repo-maintenance-swarm/RESULT.md">Repository-maintenance pilot</a> and <a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/repo-maintenance-swarm/PEER-REVIEW-COMPARISON.md">matched review comparison</a></strong><small>Code repairs, typed review, hidden evaluation, the duration-parser regression, and the case for monotonic acceptance.</small></div>
+            </li>
+            <li>
+              <div><strong><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/formal-protocol-swarm/RESULT.md">Formal protocol result</a> and <a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/formal-protocol-swarm/CONFORMANCE-RESULT.md">runtime conformance</a></strong><small>Luna proposals, Z3 authority, replayable certificate, invalid mutations, and preservation of the unsafe runtime boundary.</small></div>
+            </li>
+            <li>
+              <div><strong><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/formal-protocol-swarm/CUBE-PREFLIGHT-RESULT.md">Formal cube preflight</a></strong><small>The frozen scale gate and the decision not to run a 27-cell formal cube.</small></div>
+            </li>
+            <li>
+              <div><strong><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/NEXT-CUBE.md">Compute-fabric build hypothesis</a> and <a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/examples/compute-fabric-cube/RESULT.md">live result</a></strong><small>3×3×3 workload, four tiers, fault schedule, 39 attributable receipts, conflict resolution, hibernation evidence, and current caveats.</small></div>
+            </li>
+            <li>
+              <div><strong><a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/NOTES.md">Research notes</a> and <a href="https://github.com/nibzard/protein/blob/01c78461bcac195107a810e562f06eb116315254/QUESTIONS.md">open questions</a></strong><small>Corrected compute-fabric thesis, alternatives pressure test, evidence policy, and unresolved production work.</small></div>
+            </li>
+          </ol>
+
+          <p class="method-note"><strong>Method note.</strong> “Observed” means a retained local run, proof harness, or repository artifact supports the statement. “Decision” means the project adopted an architecture rule. “Inference” means the evidence suggests a direction but does not prove it generally. “Open” means the capability or guarantee is absent, incomplete, or untested. Measurements came from local development environments and must not be generalized into production SLAs.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer>
+    <div class="footer-inner">
+      <p><strong>Protein</strong><small>Durable cells, selective compute, verifiable work.</small></p>
+      <p class="mono"><a href="#top">BACK TO TOP ↑</a><small>Overview assembled 11 Aug 2026 · source commit 01c7846</small></p>
+    </div>
+  </footer>
+
+  <script>
+    (() => {
+      const progress = document.querySelector(".reading-progress span");
+      const navLinks = [...document.querySelectorAll(".toc a[href^='#']")];
+      const sections = navLinks
+        .map((link) => document.querySelector(link.getAttribute("href")))
+        .filter(Boolean);
+
+      const updateProgress = () => {
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        const ratio = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+        progress.style.width = (ratio * 100) + "%";
+      };
+      updateProgress();
+      window.addEventListener("scroll", updateProgress, { passive: true });
+      window.addEventListener("resize", updateProgress, { passive: true });
+
+      if ("IntersectionObserver" in window) {
+        const observer = new IntersectionObserver((entries) => {
+          const visible = entries
+            .filter((entry) => entry.isIntersecting)
+            .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+          if (!visible) return;
+          navLinks.forEach((link) => {
+            const active = link.getAttribute("href") === "#" + visible.target.id;
+            if (active) link.setAttribute("aria-current", "true");
+            else link.removeAttribute("aria-current");
+          });
+        }, { rootMargin: "-18% 0px -64% 0px", threshold: [0, .1, .4] });
+        sections.forEach((section) => observer.observe(section));
+      }
+
+      const filterButtons = [...document.querySelectorAll("[data-filter]")];
+      const evidenceRows = [...document.querySelectorAll("#evidence tbody tr[data-kind]")];
+      filterButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const filter = button.dataset.filter;
+          filterButtons.forEach((candidate) => {
+            candidate.setAttribute("aria-pressed", String(candidate === button));
+          });
+          evidenceRows.forEach((row) => {
+            row.hidden = filter !== "all" && row.dataset.kind !== filter;
+          });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
